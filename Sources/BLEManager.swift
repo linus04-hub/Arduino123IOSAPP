@@ -52,11 +52,15 @@ final class BLEManager: NSObject, ObservableObject {
     // Bridge — muss zur Firmware passen (SERVICE_UUID / DATA_UUID)
     static let bridgeService = CBUUID(string: "C172A000-2C60-4E6B-9F1D-7A3E5B8C0001")
     static let bridgeData    = CBUUID(string: "C172A001-2C60-4E6B-9F1D-7A3E5B8C0001")
-    // 123ignition (BlueRadios BRSP, siehe Tune123.swift)
+    // 123ignition, aeltere Modelle (BlueRadios BRSP, siehe Tune123.swift)
     static let tuneService = CBUUID(string: Tune123.serviceUUIDString)
     static let tuneMode    = CBUUID(string: Tune123.modeUUIDString)
     static let tuneRX      = CBUUID(string: Tune123.rxUUIDString)
     static let tuneTX      = CBUUID(string: Tune123.txUUIDString)
+    // 123ignition, neuere Modelle (Nordic UART Service)
+    static let nusService  = CBUUID(string: Tune123.nusServiceUUIDString)
+    static let nusRX       = CBUUID(string: Tune123.nusRXUUIDString)
+    static let nusTX       = CBUUID(string: Tune123.nusTXUUIDString)
 
     static let graphPoints = 120                      // 120 x 0.5 s = 60 s
     static let bridgeStaleAfter: TimeInterval = 3
@@ -290,9 +294,25 @@ final class BLEManager: NSObject, ObservableObject {
         guard central.state == .poweredOn, !isDemo else { return }
         var services: [CBUUID] = []
         if bridge == nil   { services.append(Self.bridgeService); bridgeState = .searching }
-        if ignition == nil { services.append(Self.tuneService);   tuneState = .searching }
+        if ignition == nil {
+            services += [Self.tuneService, Self.nusService]
+            tuneState = .searching
+        }
         guard !services.isEmpty else { central.stopScan(); return }
-        central.scanForPeripherals(withServices: services, options: nil)
+        // Duplikate erlauben: Name und Hersteller-ID der 123 kommen evtl. erst mit der Scan-Antwort
+        central.scanForPeripherals(withServices: services,
+                                   options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
+    }
+
+    /// Nordic UART nutzen viele Geraete. Als 123 zaehlt es nur mit passendem Namen oder Hersteller.
+    private func is123(name: String, advertisementData: [String: Any]) -> Bool {
+        let n = name.uppercased()
+        if n.contains("123") || n.contains("TUNE") { return true }
+        if let m = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data, m.count >= 2 {
+            let id = UInt16(m[m.startIndex]) | (UInt16(m[m.startIndex + 1]) << 8)
+            return id == Tune123.albertronicID
+        }
+        return false
     }
 
     private func retryLater() {
@@ -333,7 +353,9 @@ extension BLEManager: CBCentralManagerDelegate {
             bridge = peripheral             // starke Referenz halten, sonst bricht iOS die Verbindung ab
             bridgeState = .connecting
             central.connect(peripheral, options: nil)
-        } else if ignition == nil, uuids.contains(Self.tuneService) || name.contains("123") {
+        } else if ignition == nil,
+                  uuids.contains(Self.tuneService)
+                  || (uuids.contains(Self.nusService) && is123(name: name, advertisementData: advertisementData)) {
             ignition = peripheral
             tuneState = .connecting
             central.connect(peripheral, options: nil)
@@ -347,7 +369,7 @@ extension BLEManager: CBCentralManagerDelegate {
             peripheral.discoverServices([Self.bridgeService])
         } else if peripheral == ignition {
             tuneParser.reset()
-            peripheral.discoverServices([Self.tuneService])
+            peripheral.discoverServices([Self.tuneService, Self.nusService])
         }
     }
 
@@ -374,18 +396,20 @@ extension BLEManager: CBCentralManagerDelegate {
 
 extension BLEManager: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        let wanted: (CBUUID, [CBUUID])
+        let wanted: [CBUUID: [CBUUID]]
         if peripheral == bridge {
-            wanted = (Self.bridgeService, [Self.bridgeData])
+            wanted = [Self.bridgeService: [Self.bridgeData]]
         } else if peripheral == ignition {
-            wanted = (Self.tuneService, [Self.tuneMode, Self.tuneRX, Self.tuneTX])
+            wanted = [Self.tuneService: [Self.tuneMode, Self.tuneRX, Self.tuneTX],
+                      Self.nusService:  [Self.nusRX, Self.nusTX]]
         } else { return }
 
-        guard let svc = peripheral.services?.first(where: { $0.uuid == wanted.0 }) else {
+        guard let svc = peripheral.services?.first(where: { wanted[$0.uuid] != nil }),
+              let chars = wanted[svc.uuid] else {
             central.cancelPeripheralConnection(peripheral)
             return
         }
-        peripheral.discoverCharacteristics(wanted.1, for: svc)
+        peripheral.discoverCharacteristics(chars, for: svc)
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
@@ -402,8 +426,9 @@ extension BLEManager: CBPeripheralDelegate {
             bridgeState = .live
 
         } else if peripheral == ignition {
-            guard let tx = chars.first(where: { $0.uuid == Self.tuneTX }),
-                  let rx = chars.first(where: { $0.uuid == Self.tuneRX }) else {
+            let nus = service.uuid == Self.nusService
+            guard let tx = chars.first(where: { $0.uuid == (nus ? Self.nusTX : Self.tuneTX) }),
+                  let rx = chars.first(where: { $0.uuid == (nus ? Self.nusRX : Self.tuneRX) }) else {
                 central.cancelPeripheralConnection(peripheral)
                 return
             }
@@ -423,7 +448,8 @@ extension BLEManager: CBPeripheralDelegate {
         guard error == nil, let data = characteristic.value else { return }
         if peripheral == bridge, bridgeState == .live, characteristic.uuid == Self.bridgeData {
             receiveBridge(data)
-        } else if peripheral == ignition, tuneState == .live, characteristic.uuid == Self.tuneTX {
+        } else if peripheral == ignition, tuneState == .live,
+                  characteristic.uuid == Self.tuneTX || characteristic.uuid == Self.nusTX {
             receiveTune(data)
         }
     }

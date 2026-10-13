@@ -35,6 +35,13 @@ enum Tune123 {
     static let rxUUIDString      = "BF03260C-7205-4C25-AF43-93B1C299D159"
     static let txUUIDString      = "18CDA784-4BD3-4370-85BB-BFED91EC86AF"
 
+    // Neuere 123\TUNE+ (Albertronic, Nordic-Chip): Nordic UART Service.
+    // Gleicher Datenstrom wie oben, nur ohne Mode-Characteristic.
+    static let nusServiceUUIDString = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
+    static let nusRXUUIDString      = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"  // write
+    static let nusTXUUIDString      = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"  // notify
+    static let albertronicID: UInt16 = 0x091A   // Hersteller-ID in den Werbedaten
+
     static let dataMode: UInt8   = 0x01
     static let hello             = Data("$$\r".utf8)  // wie der Anfang der 123-App, ohne Kurvenabfrage
     static let keepalive         = Data("$".utf8)
