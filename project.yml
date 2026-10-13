@@ -1,0 +1,35 @@
+# XcodeGen-Projektbeschreibung — erzeugt CitroenAnzeige.xcodeproj
+# (build_ipa.sh ruft das automatisch auf)
+name: CitroenAnzeige
+options:
+  bundleIdPrefix: de.linus
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+targets:
+  CitroenAnzeige:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Resources
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Citroën
+        UILaunchScreen: {}
+        NSBluetoothAlwaysUsageDescription: Verbindet sich mit der Anzeige im Auto und der 123ignition, um Lambda, Öl, Tank, Drehzahl und Zündwinkel anzuzeigen.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIUserInterfaceStyle: Dark
+        UIRequiresFullScreen: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.linus.citroenanzeige
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic

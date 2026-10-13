@@ -1,0 +1,430 @@
+import Foundation
+import CoreBluetooth
+import UIKit
+
+// ── Messwerte, wie sie die BLE-Bridge schickt ─────────────────────
+struct Reading: Equatable {
+    var lambda: Double     // 4.5 = Sonde nicht bereit
+    var pressure: Double   // bar, -1 = Sensorfehler
+    var temp: Double       // °C,  -1 = Sensorfehler
+    var tank: Double       // %, 255 = kein Tankwert
+    var flags: UInt8       // Bit0: Bridge-Eingang ok, Bit1: Arduino-Signal ok
+
+    var c6Ok: Bool      { flags & 0x01 != 0 }
+    var arduinoOk: Bool { flags & 0x02 != 0 }
+    var tankValue: Double? { tank <= 100 ? tank : nil }
+}
+
+extension Reading {
+    /// 8-Byte-Paket, Little Endian — Aufbau wie `struct Packet` in ESP32_BLE_Bridge_V1
+    init?(packet data: Data) {
+        guard data.count >= 8 else { return nil }
+        let b = [UInt8](data.prefix(8))
+        let lam = UInt16(b[0]) | (UInt16(b[1]) << 8)
+        let pr  = Int16(bitPattern: UInt16(b[2]) | (UInt16(b[3]) << 8))
+        let t   = Int16(bitPattern: UInt16(b[4]) | (UInt16(b[5]) << 8))
+        self.init(lambda: Double(lam) / 1000,
+                  pressure: Double(pr) / 100,
+                  temp: Double(t) / 10,
+                  tank: Double(b[6]),
+                  flags: b[7])
+    }
+
+    /// Gegenrichtung, damit der Demo-Modus durch denselben Decoder laeuft
+    var packet: Data {
+        let lam = UInt16(clamping: Int((lambda * 1000).rounded()))
+        let pr  = UInt16(bitPattern: Int16(clamping: Int((pressure * 100).rounded())))
+        let t   = UInt16(bitPattern: Int16(clamping: Int((temp * 10).rounded())))
+        let tk  = UInt8(clamping: Int(tank.rounded()))
+        return Data([UInt8(lam & 0xFF), UInt8(lam >> 8),
+                     UInt8(pr & 0xFF),  UInt8(pr >> 8),
+                     UInt8(t & 0xFF),   UInt8(t >> 8),
+                     tk, flags])
+    }
+}
+
+enum LinkState: Equatable {
+    case searching, connecting, live, demo, bluetoothOff, unauthorized
+}
+
+// ── Bluetooth: Bridge (Lambda/Oel/Tank) und 123ignition gleichzeitig ──
+final class BLEManager: NSObject, ObservableObject {
+    // Bridge — muss zur Firmware passen (SERVICE_UUID / DATA_UUID)
+    static let bridgeService = CBUUID(string: "C172A000-2C60-4E6B-9F1D-7A3E5B8C0001")
+    static let bridgeData    = CBUUID(string: "C172A001-2C60-4E6B-9F1D-7A3E5B8C0001")
+    // 123ignition (BlueRadios BRSP, siehe Tune123.swift)
+    static let tuneService = CBUUID(string: Tune123.serviceUUIDString)
+    static let tuneMode    = CBUUID(string: Tune123.modeUUIDString)
+    static let tuneRX      = CBUUID(string: Tune123.rxUUIDString)
+    static let tuneTX      = CBUUID(string: Tune123.txUUIDString)
+
+    static let graphPoints = 120                      // 120 x 0.5 s = 60 s
+    static let bridgeStaleAfter: TimeInterval = 3
+    static let tuneStaleAfter: TimeInterval = 5       // 123 sendet nur ca. 3 Frames/s, reihum
+
+    @Published private(set) var bridgeState: LinkState = .searching
+    @Published private(set) var tuneState: LinkState = .searching
+    @Published private(set) var shown: Reading?        // Bridge, geglaettet; nil = keine Daten
+    @Published private(set) var tune: TuneReading?     // 123, geglaettet; nil = keine Daten
+    @Published private(set) var history: [Double?] = Array(repeating: nil, count: BLEManager.graphPoints)
+    @Published private(set) var warning: String?      // Bridge / Bluetooth allgemein
+    @Published private(set) var tuneWarning: String?   // 123ignition
+
+    var isDemo: Bool { bridgeState == .demo }
+    var noSignal: Bool { bridgeState == .live && warning != nil }
+    var anyLive: Bool { bridgeState == .live || tuneState == .live }
+
+    private var central: CBCentralManager!
+    private var bridge: CBPeripheral?
+    private var ignition: CBPeripheral?
+    private var tuneRXChar: CBCharacteristic?
+
+    private var target: Reading?
+    private var lastPacket = Date.distantPast
+    private var tuneTarget: TuneReading?
+    private var tuneParser = Tune123Parser()
+    private var lastTuneFrame = Date.distantPast
+    private var lastKeepalive = Date.distantPast
+
+    private var lastGraph = Date()
+    private var lastDemo = Date.distantPast
+    private var demoTime: Double = 0
+    private var tuneDemo = Tune123Demo()
+    private var timer: Timer?
+    private var idleTimerOff = false
+
+    override init() {
+        super.init()
+        central = CBCentralManager(delegate: self, queue: .main)
+        // 25 Hz wie die Wertanimation im Display
+        let t = Timer(timeInterval: 0.04, repeats: true) { [weak self] _ in self?.tick() }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    // ── Demo ──────────────────────────────────────────────────────
+    func toggleDemo() {
+        if isDemo {
+            target = nil
+            tuneTarget = nil
+            tuneParser.reset()
+            bridgeState = .searching
+            tuneState = .searching
+            centralManagerDidUpdateState(central)   // scannt, oder zeigt "Bluetooth aus"
+        } else {
+            if central.state == .poweredOn {
+                central.stopScan()
+                // erst Referenzen loeschen, dann trennen: so verbindet didDisconnect nicht neu
+                let old = [bridge, ignition].compactMap { $0 }
+                bridge = nil
+                ignition = nil
+                tuneRXChar = nil
+                old.forEach { central.cancelPeripheralConnection($0) }
+            }
+            bridge = nil
+            ignition = nil
+            target = nil
+            tuneTarget = nil
+            tuneParser.reset()
+            demoTime = 0
+            tuneDemo = Tune123Demo()
+            bridgeState = .demo
+            tuneState = .demo
+            demoStep()
+        }
+    }
+
+    private func demoStep() {
+        demoTime += 0.25
+        let n = { Double.random(in: -0.5...0.5) }
+        let r = Reading(lambda:   0.995 + 0.035 * sin(demoTime / 3.1) + 0.012 * n(),
+                        pressure: 2.6 + 0.9 * sin(demoTime / 7) + 0.05 * n(),
+                        temp:     min(96, 72 + demoTime * 0.12) + 0.2 * n(),
+                        tank:     max(8, 62 - demoTime * 0.02),
+                        flags:    0x03)
+        receiveBridge(r.packet)
+        receiveTune(tuneDemo.next())   // laeuft durch denselben Parser wie echte Daten
+    }
+
+    // ── Takt: Glaettung, Verlauf, Keepalive, Warnungen ───────────
+    private func tick() {
+        let now = Date()
+
+        if isDemo, now.timeIntervalSince(lastDemo) >= 0.25 {
+            lastDemo = now
+            demoStep()
+        }
+
+        // Bridge-Werte weich nachfuehren (gleiche Logik wie ease() im C6)
+        if let t = target {
+            var s = shown ?? t
+            s.lambda   = (t.lambda > 2 || s.lambda > 2) ? t.lambda : ease(s.lambda, t.lambda)
+            s.pressure = (t.pressure < 0 || s.pressure < 0) ? t.pressure : ease(s.pressure, t.pressure)
+            s.temp     = (t.temp < 0 || s.temp < 0) ? t.temp : ease(s.temp, t.temp)
+            // 255 = kein Tankwert (Bridge v2 ohne Tank-Kabel) -> nicht gleiten
+            s.tank     = (t.tank > 100 || s.tank > 100) ? t.tank : ease(s.tank, t.tank)
+            s.flags    = t.flags
+            if s != shown { shown = s }
+        } else if shown != nil {
+            shown = nil
+        }
+
+        // 123: Drehzahl und Zuendwinkel gleiten, Rest direkt
+        if let t = tuneTarget {
+            var s = tune ?? t
+            s.rpm         = easeOpt(s.rpm, t.rpm)
+            s.advance     = easeOpt(s.advance, t.advance)
+            s.mapKPa      = t.mapKPa
+            s.moduleTemp  = t.moduleTemp
+            s.tuningMode  = t.tuningMode
+            s.coilCurrent = t.coilCurrent
+            s.voltage     = t.voltage
+            if s != tune { tune = s }
+        } else if tune != nil {
+            tune = nil
+        }
+
+        // Keepalive an die 123, wie es die 123-App macht
+        if tuneState == .live, let rx = tuneRXChar, let p = ignition,
+           now.timeIntervalSince(lastKeepalive) >= 1 {
+            lastKeepalive = now
+            write(Tune123.keepalive, to: rx, on: p)
+        }
+
+        if now.timeIntervalSince(lastGraph) >= 0.5 {
+            lastGraph = now
+            var h = history
+            h.removeFirst()
+            if let t = target, t.lambda <= 2, bridgeState == .live || bridgeState == .demo {
+                h.append(t.lambda)
+            } else {
+                h.append(nil)
+            }
+            history = h
+        }
+
+        updateWarnings(now: now)
+
+        // Bildschirm nicht sperren, solange ein Geraet verbunden ist
+        if anyLive != idleTimerOff {
+            idleTimerOff = anyLive
+            UIApplication.shared.isIdleTimerDisabled = anyLive
+        }
+    }
+
+    private func ease(_ cur: Double, _ tgt: Double) -> Double {
+        let d = tgt - cur
+        return abs(d) < 0.002 ? tgt : cur + d * 0.30
+    }
+
+    private func easeOpt(_ cur: Double?, _ tgt: Double?) -> Double? {
+        guard let t = tgt else { return nil }
+        guard let c = cur else { return t }
+        return abs(t - c) < 0.5 ? t : c + (t - c) * 0.30
+    }
+
+    private func updateWarnings(now: Date) {
+        var w: String?
+        switch bridgeState {
+        case .live:
+            let age = now.timeIntervalSince(lastPacket)
+            if age > Self.bridgeStaleAfter {
+                w = "Keine Daten seit \(Int(age)) s"
+            } else if let t = target, !t.c6Ok {
+                w = "Keine Daten vom Display-ESP32 – Kabel C6 → Bridge prüfen"
+            } else if let t = target, !t.arduinoOk {
+                w = "Kein Signal vom Arduino – Werte sind veraltet"
+            }
+        case .connecting where target != nil:
+            w = "Verbindung zur Anzeige weg – verbinde neu …"
+        case .bluetoothOff:
+            w = "Bluetooth ist aus"
+        case .unauthorized:
+            w = "Kein Bluetooth-Zugriff: Einstellungen → Citroën → Bluetooth erlauben"
+        default:
+            break
+        }
+        if w != warning { warning = w }
+
+        var tw: String?
+        switch tuneState {
+        case .live:
+            let age = now.timeIntervalSince(lastTuneFrame)
+            if age > Self.tuneStaleAfter {
+                tw = "123ignition: keine Daten seit \(Int(age)) s"
+            } else if tuneTarget?.tuningMode == true {
+                tw = "123ignition im Tuning-Modus – Zündwinkel weicht von der Kurve ab"
+            }
+        case .connecting where tuneTarget != nil:
+            tw = "Verbindung zur 123ignition weg – verbinde neu …"
+        default:
+            break
+        }
+        if tw != tuneWarning { tuneWarning = tw }
+    }
+
+    private func receiveBridge(_ data: Data) {
+        guard let r = Reading(packet: data) else { return }
+        if target == nil { shown = r }      // erster Wert ohne Hochgleiten
+        target = r
+        lastPacket = Date()
+    }
+
+    private func receiveTune(_ data: Data) {
+        let frames = tuneParser.feed(data)
+        guard !frames.isEmpty else { return }
+        var t = tuneTarget ?? TuneReading()
+        frames.forEach { t.apply($0) }
+        if tuneTarget == nil { tune = t }
+        tuneTarget = t
+        lastTuneFrame = Date()
+    }
+
+    private func write(_ data: Data, to ch: CBCharacteristic, on p: CBPeripheral) {
+        let type: CBCharacteristicWriteType = ch.properties.contains(.write) ? .withResponse : .withoutResponse
+        p.writeValue(data, for: ch, type: type)
+    }
+
+    // ── Verbindungsaufbau ─────────────────────────────────────────
+    private func startScanIfPossible() {
+        guard central.state == .poweredOn, !isDemo else { return }
+        var services: [CBUUID] = []
+        if bridge == nil   { services.append(Self.bridgeService); bridgeState = .searching }
+        if ignition == nil { services.append(Self.tuneService);   tuneState = .searching }
+        guard !services.isEmpty else { central.stopScan(); return }
+        central.scanForPeripherals(withServices: services, options: nil)
+    }
+
+    private func retryLater() {
+        guard !isDemo else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.startScanIfPossible()
+        }
+    }
+}
+
+extension BLEManager: CBCentralManagerDelegate {
+    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        guard !isDemo else { return }
+        switch central.state {
+        case .poweredOn:
+            startScanIfPossible()
+        default:
+            bridge = nil
+            ignition = nil
+            tuneRXChar = nil
+            target = nil
+            tuneTarget = nil
+            tuneParser.reset()
+            let s: LinkState = central.state == .unauthorized ? .unauthorized : .bluetoothOff
+            bridgeState = s
+            tuneState = s
+        }
+    }
+
+    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
+                        advertisementData: [String: Any], rssi RSSI: NSNumber) {
+        guard !isDemo, peripheral != bridge, peripheral != ignition else { return }
+        let uuids = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? [])
+                  + (advertisementData[CBAdvertisementDataOverflowServiceUUIDsKey] as? [CBUUID] ?? [])
+        let name = (advertisementData[CBAdvertisementDataLocalNameKey] as? String) ?? peripheral.name ?? ""
+
+        if bridge == nil, uuids.contains(Self.bridgeService) || name.hasPrefix("Citroen") {
+            bridge = peripheral             // starke Referenz halten, sonst bricht iOS die Verbindung ab
+            bridgeState = .connecting
+            central.connect(peripheral, options: nil)
+        } else if ignition == nil, uuids.contains(Self.tuneService) || name.contains("123") {
+            ignition = peripheral
+            tuneState = .connecting
+            central.connect(peripheral, options: nil)
+        }
+        if bridge != nil && ignition != nil { central.stopScan() }
+    }
+
+    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        peripheral.delegate = self
+        if peripheral == bridge {
+            peripheral.discoverServices([Self.bridgeService])
+        } else if peripheral == ignition {
+            tuneParser.reset()
+            peripheral.discoverServices([Self.tuneService])
+        }
+    }
+
+    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        if peripheral == bridge { bridge = nil }
+        if peripheral == ignition { ignition = nil; tuneRXChar = nil }
+        retryLater()
+    }
+
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        guard !isDemo else { return }
+        // Verbindungswunsch bleibt offen: iOS verbindet von selbst neu,
+        // sobald das Geraet wieder Strom hat und in Reichweite ist.
+        if peripheral == bridge {
+            bridgeState = .connecting
+            central.connect(peripheral, options: nil)
+        } else if peripheral == ignition {
+            tuneRXChar = nil
+            tuneState = .connecting
+            central.connect(peripheral, options: nil)
+        }
+    }
+}
+
+extension BLEManager: CBPeripheralDelegate {
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+        let wanted: (CBUUID, [CBUUID])
+        if peripheral == bridge {
+            wanted = (Self.bridgeService, [Self.bridgeData])
+        } else if peripheral == ignition {
+            wanted = (Self.tuneService, [Self.tuneMode, Self.tuneRX, Self.tuneTX])
+        } else { return }
+
+        guard let svc = peripheral.services?.first(where: { $0.uuid == wanted.0 }) else {
+            central.cancelPeripheralConnection(peripheral)
+            return
+        }
+        peripheral.discoverCharacteristics(wanted.1, for: svc)
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+        let chars = service.characteristics ?? []
+
+        if peripheral == bridge {
+            guard let ch = chars.first(where: { $0.uuid == Self.bridgeData }) else {
+                central.cancelPeripheralConnection(peripheral)
+                return
+            }
+            peripheral.setNotifyValue(true, for: ch)
+            peripheral.readValue(for: ch)
+            lastPacket = Date()
+            bridgeState = .live
+
+        } else if peripheral == ignition {
+            guard let tx = chars.first(where: { $0.uuid == Self.tuneTX }),
+                  let rx = chars.first(where: { $0.uuid == Self.tuneRX }) else {
+                central.cancelPeripheralConnection(peripheral)
+                return
+            }
+            peripheral.setNotifyValue(true, for: tx)
+            if let mode = chars.first(where: { $0.uuid == Self.tuneMode }) {
+                write(Data([Tune123.dataMode]), to: mode, on: peripheral)
+            }
+            write(Tune123.hello, to: rx, on: peripheral)
+            tuneRXChar = rx
+            lastTuneFrame = Date()       // Schonfrist, bevor "keine Daten" erscheint
+            lastKeepalive = Date()
+            tuneState = .live
+        }
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+        guard error == nil, let data = characteristic.value else { return }
+        if peripheral == bridge, bridgeState == .live, characteristic.uuid == Self.bridgeData {
+            receiveBridge(data)
+        } else if peripheral == ignition, tuneState == .live, characteristic.uuid == Self.tuneTX {
+            receiveTune(data)
+        }
+    }
+}
