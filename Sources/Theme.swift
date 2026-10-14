@@ -12,17 +12,25 @@ extension Color {
 }
 
 enum Theme {
-    static let bg        = Color(hex: 0x0D0D0D)
-    static let bgNoSignal = Color(hex: 0x2A0A0A)   // roetlich bei Signalverlust, wie im Display
-    static let surface   = Color(hex: 0x14141F)
-    static let surface2  = Color(hex: 0x1A1A2E)
-    static let line      = Color(hex: 0x2A2A3A)
-    static let fg        = Color(hex: 0xECECF3)
-    static let muted     = Color(hex: 0x8A8A9C)
-    static let accent    = Color(hex: 0xFD8C00)
-    static let ok        = Color(hex: 0x2ECC71)
-    static let warn      = Color(hex: 0xF1C40F)
-    static let crit      = Color(hex: 0xE74C3C)
+    /// Nachtmodus: dunkler, warmer Ton, blendet nicht. Gesetzt vom AppModel;
+    /// die Oberflaeche wird beim Umschalten komplett neu aufgebaut.
+    static var night = false
+
+    private static func pick(_ day: UInt32, _ dark: UInt32) -> Color { Color(hex: night ? dark : day) }
+
+    static var bg: Color         { pick(0x0D0D0D, 0x000000) }
+    static var bgNoSignal: Color { pick(0x2A0A0A, 0x1A0505) }   // roetlich bei Signalverlust, wie im Display
+    static var surface: Color    { pick(0x14141F, 0x0F0907) }
+    static var surface2: Color   { pick(0x1A1A2E, 0x1A0F0B) }
+    static var line: Color       { pick(0x2A2A3A, 0x2A1A14) }
+    static var fg: Color         { pick(0xECECF3, 0xE8A07C) }
+    static var muted: Color      { pick(0x8A8A9C, 0x8C5E4C) }
+    static var accent: Color     { pick(0xFD8C00, 0xD9690A) }
+    static var dialFace: Color   { pick(0x101018, 0x0A0605) }   // Zifferblatt der Rundinstrumente
+    static var load: Color       { pick(0x40C4FF, 0x2E7FA8) }   // wenig Last in der Punktewolke
+    static var ok: Color         { pick(0x2ECC71, 0x4FA83A) }
+    static var warn: Color       { pick(0xF1C40F, 0xC99A06) }
+    static var crit: Color       { pick(0xE74C3C, 0xE0362B) }
 }
 
 enum Level {

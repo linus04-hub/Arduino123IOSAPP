@@ -43,6 +43,29 @@ extension Reading {
     }
 }
 
+/// Ein Zeitpunkt im Verlauf (alle 0,25 s). nil = kein gueltiger Wert (Luecke in der Kurve)
+struct Sample: Equatable {
+    let time: Date
+    var lambda: Double? = nil
+    var rpm: Double? = nil
+    var mapKPa: Double? = nil
+    var oilP: Double? = nil
+    var oilT: Double? = nil
+    var tank: Double? = nil
+    var advance: Double? = nil
+    var voltage: Double? = nil
+    var coil: Double? = nil
+    var moduleTemp: Double? = nil
+    var speed: Double? = nil          // km/h vom iPhone-GPS
+}
+
+/// Ein Punkt fuer "Lambda ueber Drehzahl"
+struct ScatterPoint: Equatable {
+    let rpm: Double
+    let lambda: Double
+    let mapKPa: Double?
+}
+
 enum LinkState: Equatable {
     case searching, connecting, live, demo, bluetoothOff, unauthorized
 }
@@ -62,21 +85,30 @@ final class BLEManager: NSObject, ObservableObject {
     static let nusRX       = CBUUID(string: Tune123.nusRXUUIDString)
     static let nusTX       = CBUUID(string: Tune123.nusTXUUIDString)
 
-    static let graphPoints = 120                      // 120 x 0.5 s = 60 s
+    static let graphStep: TimeInterval = 0.25         // Abstand der Punkte im Verlauf
+    static let graphWindow: TimeInterval = 60         // Zeitfenster des Verlaufs
+    static let scatterMax = 1200                      // 2 Punkte/s -> 10 min
     static let bridgeStaleAfter: TimeInterval = 3
     static let tuneStaleAfter: TimeInterval = 5       // 123 sendet nur ca. 3 Frames/s, reihum
 
     @Published private(set) var bridgeState: LinkState = .searching
     @Published private(set) var tuneState: LinkState = .searching
-    @Published private(set) var shown: Reading?        // Bridge, geglaettet; nil = keine Daten
-    @Published private(set) var tune: TuneReading?     // 123, geglaettet; nil = keine Daten
-    @Published private(set) var history: [Double?] = Array(repeating: nil, count: BLEManager.graphPoints)
+    // Letzte Messwerte. Das weiche Mitlaufen machen die Anzeigen selbst (Motion in Gauges.swift).
+    @Published private(set) var shown: Reading?        // Bridge; nil = keine Daten
+    @Published private(set) var tune: TuneReading?     // 123; nil = keine Daten
+    @Published private(set) var history: [Sample] = []
+    @Published private(set) var scatter: [ScatterPoint] = []
     @Published private(set) var warning: String?      // Bridge / Bluetooth allgemein
     @Published private(set) var tuneWarning: String?   // 123ignition
 
     var isDemo: Bool { bridgeState == .demo }
     var noSignal: Bool { bridgeState == .live && warning != nil }
     var anyLive: Bool { bridgeState == .live || tuneState == .live }
+
+    /// Wird alle 0,25 s mit den aktuellen Werten aufgerufen (Fahrtenschreiber, Messreihen, Live-Aktivitaet)
+    var onSample: ((Sample) -> Void)?
+    /// Liefert das GPS-Tempo in km/h
+    var speedSource: () -> Double? = { nil }
 
     private var central: CBCentralManager!
     private var bridge: CBPeripheral?
@@ -91,8 +123,10 @@ final class BLEManager: NSObject, ObservableObject {
     private var lastKeepalive = Date.distantPast
 
     private var lastGraph = Date()
+    private var scatterTurn = false
     private var lastDemo = Date.distantPast
     private var demoTime: Double = 0
+    private var demoCount = 0
     private var tuneDemo = Tune123Demo()
     private var timer: Timer?
     private var idleTimerOff = false
@@ -100,17 +134,28 @@ final class BLEManager: NSObject, ObservableObject {
     override init() {
         super.init()
         central = CBCentralManager(delegate: self, queue: .main)
-        // 25 Hz wie die Wertanimation im Display
-        let t = Timer(timeInterval: 0.04, repeats: true) { [weak self] _ in self?.tick() }
+        // 10 Hz fuer Demo, Keepalive, Verlauf und Warnungen. Die Anzeigen
+        // animieren unabhaengig davon mit Bildschirmrate.
+        let t = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(t, forMode: .common)
         timer = t
     }
 
+    /// Punktewolke leeren, z. B. nach einer Aenderung am Vergaser
+    func clearScatter() {
+        scatter = []
+    }
+
     // ── Demo ──────────────────────────────────────────────────────
     func toggleDemo() {
+        // Demo- und echte Werte nicht im Verlauf mischen
+        history = []
+        scatter = []
         if isDemo {
             target = nil
             tuneTarget = nil
+            shown = nil
+            tune = nil
             tuneParser.reset()
             bridgeState = .searching
             tuneState = .searching
@@ -129,6 +174,8 @@ final class BLEManager: NSObject, ObservableObject {
             ignition = nil
             target = nil
             tuneTarget = nil
+            shown = nil
+            tune = nil
             tuneParser.reset()
             demoTime = 0
             tuneDemo = Tune123Demo()
@@ -139,53 +186,27 @@ final class BLEManager: NSObject, ObservableObject {
     }
 
     private func demoStep() {
-        demoTime += 0.25
+        demoTime += 0.1
+        demoCount += 1
         let n = { Double.random(in: -0.5...0.5) }
         let r = Reading(lambda:   0.995 + 0.035 * sin(demoTime / 3.1) + 0.012 * n(),
                         pressure: 2.6 + 0.9 * sin(demoTime / 7) + 0.05 * n(),
                         temp:     min(96, 72 + demoTime * 0.12) + 0.2 * n(),
                         tank:     max(8, 62 - demoTime * 0.02),
                         flags:    0x03)
-        receiveBridge(r.packet)
-        receiveTune(tuneDemo.next())   // laeuft durch denselben Parser wie echte Daten
+        receiveBridge(r.packet)                     // 10 Werte/s wie die Bridge
+        if demoCount % 3 == 0 {
+            receiveTune(tuneDemo.next())            // seltener, wie die 123; gleicher Parser wie echt
+        }
     }
 
-    // ── Takt: Glaettung, Verlauf, Keepalive, Warnungen ───────────
+    // ── Takt: Demo, Keepalive, Verlauf, Warnungen ────────────────
     private func tick() {
         let now = Date()
 
-        if isDemo, now.timeIntervalSince(lastDemo) >= 0.25 {
+        if isDemo, now.timeIntervalSince(lastDemo) >= 0.09 {
             lastDemo = now
             demoStep()
-        }
-
-        // Bridge-Werte weich nachfuehren (gleiche Logik wie ease() im C6)
-        if let t = target {
-            var s = shown ?? t
-            s.lambda   = (t.lambda > 2 || s.lambda > 2) ? t.lambda : ease(s.lambda, t.lambda)
-            s.pressure = (t.pressure < 0 || s.pressure < 0) ? t.pressure : ease(s.pressure, t.pressure)
-            s.temp     = (t.temp < 0 || s.temp < 0) ? t.temp : ease(s.temp, t.temp)
-            // 255 = kein Tankwert (Bridge v2 ohne Tank-Kabel) -> nicht gleiten
-            s.tank     = (t.tank > 100 || s.tank > 100) ? t.tank : ease(s.tank, t.tank)
-            s.flags    = t.flags
-            if s != shown { shown = s }
-        } else if shown != nil {
-            shown = nil
-        }
-
-        // 123: Drehzahl und Zuendwinkel gleiten, Rest direkt
-        if let t = tuneTarget {
-            var s = tune ?? t
-            s.rpm         = easeOpt(s.rpm, t.rpm)
-            s.advance     = easeOpt(s.advance, t.advance)
-            s.mapKPa      = t.mapKPa
-            s.moduleTemp  = t.moduleTemp
-            s.tuningMode  = t.tuningMode
-            s.coilCurrent = t.coilCurrent
-            s.voltage     = t.voltage
-            if s != tune { tune = s }
-        } else if tune != nil {
-            tune = nil
         }
 
         // Keepalive an die 123, wie es die 123-App macht
@@ -195,16 +216,26 @@ final class BLEManager: NSObject, ObservableObject {
             write(Tune123.keepalive, to: rx, on: p)
         }
 
-        if now.timeIntervalSince(lastGraph) >= 0.5 {
+        if now.timeIntervalSince(lastGraph) >= Self.graphStep {
             lastGraph = now
+            let sample = currentSample(now)
             var h = history
-            h.removeFirst()
-            if let t = target, t.lambda <= 2, bridgeState == .live || bridgeState == .demo {
-                h.append(t.lambda)
-            } else {
-                h.append(nil)
+            h.append(sample)
+            // etwas mehr als 60 s behalten, damit die Kurve links sauber rauslaeuft
+            if let cut = h.firstIndex(where: { now.timeIntervalSince($0.time) <= Self.graphWindow + 1 }) {
+                h.removeFirst(cut)
             }
             history = h
+            onSample?(sample)
+
+            // Punktewolke nur jeden zweiten Takt (2 Punkte/s), und nur mit Lambda UND Drehzahl
+            scatterTurn.toggle()
+            if scatterTurn, let l = sample.lambda, let r = sample.rpm, r >= 500 {
+                var sc = scatter
+                sc.append(ScatterPoint(rpm: r, lambda: l, mapKPa: sample.mapKPa))
+                if sc.count > Self.scatterMax { sc.removeFirst(sc.count - Self.scatterMax) }
+                scatter = sc
+            }
         }
 
         updateWarnings(now: now)
@@ -216,15 +247,29 @@ final class BLEManager: NSObject, ObservableObject {
         }
     }
 
-    private func ease(_ cur: Double, _ tgt: Double) -> Double {
-        let d = tgt - cur
-        return abs(d) < 0.002 ? tgt : cur + d * 0.30
-    }
-
-    private func easeOpt(_ cur: Double?, _ tgt: Double?) -> Double? {
-        guard let t = tgt else { return nil }
-        guard let c = cur else { return t }
-        return abs(t - c) < 0.5 ? t : c + (t - c) * 0.30
+    /// Aktuelle Werte fuer den Verlauf; veraltete Werte werden zur Luecke
+    private func currentSample(_ now: Date) -> Sample {
+        var s = Sample(time: now)
+        let bridgeFresh = (bridgeState == .live || bridgeState == .demo)
+            && now.timeIntervalSince(lastPacket) <= Self.bridgeStaleAfter
+        if bridgeFresh, let t = target {
+            if t.lambda <= 2 { s.lambda = t.lambda }
+            if t.pressure >= 0 { s.oilP = t.pressure }
+            if t.temp >= 0 { s.oilT = t.temp }
+            s.tank = t.tankValue
+        }
+        let tuneFresh = (tuneState == .live || tuneState == .demo)
+            && now.timeIntervalSince(lastTuneFrame) <= Self.tuneStaleAfter
+        if tuneFresh, let t = tuneTarget {
+            s.rpm = t.rpm
+            s.mapKPa = t.mapKPa
+            s.advance = t.advance
+            s.voltage = t.voltage
+            s.coil = t.coilCurrent
+            s.moduleTemp = t.moduleTemp
+        }
+        s.speed = speedSource()
+        return s
     }
 
     private func updateWarnings(now: Date) {
@@ -269,8 +314,8 @@ final class BLEManager: NSObject, ObservableObject {
 
     private func receiveBridge(_ data: Data) {
         guard let r = Reading(packet: data) else { return }
-        if target == nil { shown = r }      // erster Wert ohne Hochgleiten
         target = r
+        if r != shown { shown = r }
         lastPacket = Date()
     }
 
@@ -279,8 +324,8 @@ final class BLEManager: NSObject, ObservableObject {
         guard !frames.isEmpty else { return }
         var t = tuneTarget ?? TuneReading()
         frames.forEach { t.apply($0) }
-        if tuneTarget == nil { tune = t }
         tuneTarget = t
+        if t != tune { tune = t }
         lastTuneFrame = Date()
     }
 
@@ -335,6 +380,8 @@ extension BLEManager: CBCentralManagerDelegate {
             tuneRXChar = nil
             target = nil
             tuneTarget = nil
+            shown = nil
+            tune = nil
             tuneParser.reset()
             let s: LinkState = central.state == .unauthorized ? .unauthorized : .bluetoothOff
             bridgeState = s

@@ -1,7 +1,11 @@
 import SwiftUI
 
-struct ContentView: View {
+// ── Tab "Live": die Anzeigen, unten die Leiste fuer Aufnahme und Markierungen ──
+struct LiveView: View {
     @ObservedObject var ble: BLEManager
+    let recorder: TripRecorder          // beobachtet die Leiste selbst
+    let location: LocationManager
+    @AppStorage("layout") private var layout: AppLayout = .standard
 
     var body: some View {
         ZStack {
@@ -16,48 +20,17 @@ struct ContentView: View {
                     if let w = ble.warning {
                         WarningBanner(text: w)
                     }
-
-                    // ── Anzeige (Bridge) ──
-                    LambdaCard(value: ble.shown?.lambda)
-
-                    HStack(spacing: 10) {
-                        pressureCard
-                        temperatureCard
-                    }
-
-                    TankCard(value: ble.shown?.tankValue)
-
-                    // ── Zuendung (123ignition) ──
-                    SectionLabel(text: "Zündung · 123ignition")
-
-                    if let w = ble.tuneWarning {
+                    // In der Standard-Ansicht steht die 123-Warnung bei den Zuendungswerten
+                    if layout != .standard, let w = ble.tuneWarning {
                         WarningBanner(text: w)
                     }
 
-                    RPMCard(rpm: ble.tune?.rpm, status: rpmStatus)
-
-                    HStack(spacing: 10) {
-                        ValueCard(title: "Zündwinkel", symbol: "bolt.fill", unit: "°",
-                                  text: format(ble.tune?.advance, "%.1f", empty: "--.-"),
-                                  level: ble.tune?.advance == nil ? .off : .info,
-                                  status: ble.tune?.advance == nil ? "" : "vor OT")
-                        mapCard
+                    switch layout {
+                    case .standard: StandardLayout(ble: ble)
+                    case .dials:    DialsLayout(ble: ble)
+                    case .focus:    FocusLayout(ble: ble)
+                    case .tuning:   TuningLayout(ble: ble)
                     }
-
-                    HStack(spacing: 10) {
-                        voltageCard
-                        CompactCard(title: "Spule",
-                                    text: format(ble.tune?.coilCurrent, "%.1f", empty: "-.-"),
-                                    unit: "A",
-                                    level: ble.tune?.coilCurrent == nil ? .off : .info)
-                        CompactCard(title: "Modul",
-                                    text: format(ble.tune?.moduleTemp, "%.0f", empty: "--"),
-                                    unit: "°C",
-                                    level: ble.tune?.moduleTemp.map { Limits.moduleTemp($0) } ?? .off)
-                    }
-
-                    // ── Verlauf ──
-                    GraphCard(history: ble.history)
 
                     if !ble.anyLive {
                         Button(action: ble.toggleDemo) {
@@ -84,17 +57,41 @@ struct ContentView: View {
                 .frame(maxWidth: 560)
                 .frame(maxWidth: .infinity)
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                RecordBar(recorder: recorder, location: location)
+            }
         }
-        .preferredColorScheme(.dark)
     }
 
-    // ── Kopf mit zwei Verbindungsanzeigen ──
+    // ── Kopf: Verbindungsanzeigen und Ansicht wechseln ──
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("CITROËN ANZEIGE")
-                .font(.system(size: 13, weight: .heavy))
-                .tracking(2)
-                .foregroundColor(Theme.accent)
+            HStack {
+                Text("CITROËN ANZEIGE")
+                    .font(.system(size: 13, weight: .heavy))
+                    .tracking(2)
+                    .foregroundColor(Theme.accent)
+                Spacer()
+                Menu {
+                    Picker("Ansicht", selection: $layout) {
+                        ForEach(AppLayout.allCases) { l in
+                            Label(l.title, systemImage: l.symbol).tag(l)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: layout.symbol)
+                        Text(layout.title)
+                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Theme.fg)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Theme.surface2, in: Capsule())
+                }
+                .accessibilityLabel("Ansicht wechseln, aktuell \(layout.title)")
+            }
             HStack(spacing: 8) {
                 StatusPill(label: "Anzeige", state: ble.bridgeState)
                 StatusPill(label: "123", state: ble.tuneState)
@@ -105,58 +102,6 @@ struct ContentView: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.accent).frame(height: 1)
         }
-    }
-
-    // ── Bridge-Werte ──
-    private var pressureCard: some View {
-        let p = ble.shown?.pressure
-        let judged: (Level, String) = p.map { Limits.pressure($0) } ?? (.off, "")
-        let text: String = p.map { $0 < 0 ? "---" : String(format: "%.2f", $0) } ?? "-.--"
-        return ValueCard(title: "Öldruck", symbol: "drop.fill", unit: "bar",
-                         text: text, level: judged.0, status: judged.1)
-    }
-
-    private var temperatureCard: some View {
-        let t = ble.shown?.temp
-        let judged: (Level, String) = t.map { Limits.temperature($0) } ?? (.off, "")
-        let text: String = t.map { $0 < 0 ? "---" : String(format: "%.1f", $0) } ?? "--.-"
-        return ValueCard(title: "Öltemp.", symbol: "thermometer", unit: "°C",
-                         text: text, level: judged.0, status: judged.1)
-    }
-
-    // ── 123-Werte ──
-    private var rpmStatus: String {
-        switch ble.tuneState {
-        case .live, .demo:
-            return ble.tune?.rpm == nil ? "warte auf Daten …" : ""
-        case .connecting:   return "verbinde …"
-        case .searching:    return "suche 123ignition …"
-        case .bluetoothOff: return "Bluetooth aus"
-        case .unauthorized: return "kein Bluetooth-Zugriff"
-        }
-    }
-
-    /// Saugrohrdruck: absolut in kPa, darunter relativ zur Atmosphaere
-    private var mapCard: some View {
-        let kPa = ble.tune?.mapKPa
-        let status: String = kPa.map { String(format: "%+.2f bar", ($0 - 100) / 100) } ?? ""
-        return ValueCard(title: "Saugrohr", symbol: "wind", unit: "kPa",
-                         text: format(kPa, "%.0f", empty: "--"),
-                         level: kPa == nil ? .off : .info,
-                         status: status)
-    }
-
-    private var voltageCard: some View {
-        let v = ble.tune?.voltage
-        let judged: (Level, String) = v.map { Limits.voltage($0) } ?? (.off, "")
-        return CompactCard(title: "Bordnetz",
-                           text: format(v, "%.1f", empty: "--.-"),
-                           unit: "V", level: judged.0, status: judged.1)
-    }
-
-    private func format(_ v: Double?, _ f: String, empty: String) -> String {
-        guard let v else { return empty }
-        return String(format: f, v)
     }
 }
 
@@ -210,5 +155,136 @@ struct WarningBanner: View {
                     .stroke(Theme.crit.opacity(0.55), lineWidth: 1)
             }
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+// ── Leiste unten: Aufnahme, Tempo, Markierung ────────────────────
+struct RecordBar: View {
+    @ObservedObject var recorder: TripRecorder
+    @ObservedObject var location: LocationManager
+    @State private var toast: String?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button {
+                if recorder.isRecording { recorder.stop() } else { recorder.start() }
+            } label: {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(recorder.isRecording ? Theme.crit : Theme.muted)
+                        .frame(width: 10, height: 10)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(recorder.isRecording ? "AUFNAHME" : "AUFNAHME AUS")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(Theme.muted)
+                        Text(recorder.isRecording ? Format.duration(recorder.current?.duration ?? 0) : "Start")
+                            .font(.system(size: 16, weight: .bold, design: .rounded).monospacedDigit())
+                            .foregroundColor(Theme.fg)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .frame(minHeight: 48)
+                .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(recorder.isRecording ? "Aufnahme beenden" : "Aufnahme starten")
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text("TEMPO")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(Theme.muted)
+                Text(location.speedKmh.map { String(format: "%.0f km/h", $0) } ?? "-- km/h")
+                    .font(.system(size: 16, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundColor(location.speedKmh == nil ? Theme.muted : Theme.fg)
+                if let km = recorder.current?.distanceKm {
+                    Text(String(format: "%.1f km", km))
+                        .font(.system(size: 11).monospacedDigit())
+                        .foregroundColor(Theme.muted)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                let n = recorder.addMarker()
+                show("Markierung \(n) gesetzt")
+            } label: {
+                Label("Markierung", systemImage: "flag.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(Color.black)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 48)
+                    .background(Theme.accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Theme.surface)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Theme.line).frame(height: 1)
+        }
+        .overlay(alignment: .top) {
+            if let t = toast {
+                Text(t)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(Color.black)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Theme.accent, in: Capsule())
+                    .offset(y: -46)
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    private func show(_ text: String) {
+        withAnimation(.easeOut(duration: 0.2)) { toast = text }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation(.easeIn(duration: 0.3)) { toast = nil }
+        }
+    }
+}
+
+// ── Formatierung fuer alle Seiten ────────────────────────────────
+enum Format {
+    static func duration(_ t: TimeInterval) -> String {
+        let s = max(0, Int(t))
+        let h = s / 3600
+        let m = (s % 3600) / 60
+        let sec = s % 60
+        return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%02d:%02d", m, sec)
+    }
+
+    static let dayFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "de_DE")
+        f.dateFormat = "EEE, d. MMM yyyy"
+        return f
+    }()
+
+    static let dayTimeFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "de_DE")
+        f.dateFormat = "EEE, d. MMM · HH:mm"
+        return f
+    }()
+
+    static let timeFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "de_DE")
+        f.dateFormat = "HH:mm:ss"
+        return f
+    }()
+
+    static func day(_ d: Date) -> String { dayFormat.string(from: d) }
+    static func dayTime(_ d: Date) -> String { dayTimeFormat.string(from: d) }
+    static func time(_ d: Date) -> String { timeFormat.string(from: d) }
+
+    /// Wert mit Einheit oder Gedankenstrich
+    static func value(_ v: Double?, _ format: String, _ unit: String = "") -> String {
+        guard let v else { return "–" }
+        let s = String(format: format, v)
+        return unit.isEmpty ? s : s + " " + unit
     }
 }

@@ -4,11 +4,11 @@ name: CitroenAnzeige
 options:
   bundleIdPrefix: de.linus
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "16.1"          # Live-Aktivitaeten gibt es ab iOS 16.1
 settings:
   base:
-    MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.2"
+    CURRENT_PROJECT_VERSION: "3"
     SWIFT_VERSION: "5.0"
 targets:
   CitroenAnzeige:
@@ -16,20 +16,51 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+      - path: Shared
       - path: Resources
+    dependencies:
+      - target: CitroenWidgets
     info:
       path: Info.plist
       properties:
         CFBundleDisplayName: Citroën
         UILaunchScreen: {}
         NSBluetoothAlwaysUsageDescription: Verbindet sich mit der Anzeige im Auto und der 123ignition, um Lambda, Öl, Tank, Drehzahl und Zündwinkel anzuzeigen.
+        NSLocationWhenInUseUsageDescription: Für Tempo und Strecke im Fahrtenschreiber.
+        NSLocationAlwaysAndWhenInUseUsageDescription: Damit Tempo und Strecke auch bei gesperrtem Bildschirm aufgezeichnet werden.
+        UIBackgroundModes:
+          - bluetooth-central
+          - location
+        NSSupportsLiveActivities: true
+        UIFileSharingEnabled: true               # Fahrten in der Dateien-App sichtbar
+        LSSupportsOpeningDocumentsInPlace: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIUserInterfaceStyle: Dark
         UIRequiresFullScreen: true
+        CADisableMinimumFrameDurationOnPhone: true   # 120 Hz auf ProMotion-iPhones
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.linus.citroenanzeige
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
+
+  CitroenWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+      - path: Shared
+    info:
+      path: CitroenWidgets-Info.plist     # ausserhalb des Quellordners
+      properties:
+        CFBundleDisplayName: Citroën
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.linus.citroenanzeige.widgets
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
