@@ -65,6 +65,8 @@ struct SettingsView: View {
                 }
                 .listRowBackground(Theme.surface)
 
+                BridgeSection(ble: model.ble)
+
                 Section {
                     LabeledContent("Version", value: version)
                     LabeledContent("Gespeicherte Fahrten", value: "\(recorder.trips.count)")
@@ -83,6 +85,60 @@ struct SettingsView: View {
             .onChange(of: night) { _ in model.updateNight() }
             .onChange(of: gps) { on in model.setGPS(on) }
             .onChange(of: liveActivity) { _ in model.refreshLiveActivity() }
+        }
+    }
+}
+
+// ── Bridge (Joy-IT): Version und Update ohne Kabel ───────────────
+struct BridgeSection: View {
+    @ObservedObject var ble: BLEManager
+    @State private var confirm = false
+    @State private var started = false
+
+    static let updatePage = URL(string: "http://192.168.4.1")!
+
+    private var versionText: String {
+        if let v = ble.bridgeVersion, ble.bridgeCanUpdate {
+            return v.replacingOccurrences(of: "Bridge ", with: "v")
+        }
+        if ble.bridgeState == .live { return ble.bridgeCanUpdate ? "…" : "v2 oder älter" }
+        return started ? "Update-Modus" : "nicht verbunden"
+    }
+
+    private var footer: String {
+        if started {
+            return "Am iPhone mit dem WLAN „Citroen-Update“ verbinden (Passwort 2cv-bridge), dann 192.168.4.1 öffnen und die .bin hochladen. Ohne Upload startet die Bridge nach 10 Minuten wieder normal."
+        }
+        if ble.bridgeState == .live && !ble.bridgeCanUpdate {
+            return "Update ohne Kabel geht ab Bridge v3. Zeigt die App nach dem Flashen noch „v2 oder älter“: Bluetooth am iPhone einmal aus- und wieder einschalten."
+        }
+        return "Neue Bridge-Versionen kommen per WLAN auf den Joy-IT, ohne Ausbauen. Die .bin exportierst du in der Arduino IDE."
+    }
+
+    var body: some View {
+        Section {
+            LabeledContent("Version", value: versionText)
+            if ble.bridgeCanUpdate {
+                Button("Bridge aktualisieren") { confirm = true }
+                    .confirmationDialog("Bridge in den Update-Modus schalten?", isPresented: $confirm,
+                                        titleVisibility: .visible) {
+                        Button("Update-Modus starten") { started = ble.startBridgeUpdate() }
+                        Button("Abbrechen", role: .cancel) {}
+                    } message: {
+                        Text("Die Bridge startet neu und öffnet das WLAN „Citroen-Update“. Lambda und Öl sind so lange nicht zu sehen.")
+                    }
+            }
+            if started {
+                Link("192.168.4.1 in Safari öffnen", destination: Self.updatePage)
+            }
+        } header: {
+            Text("Bridge (Joy-IT)")
+        } footer: {
+            Text(footer)
+        }
+        .listRowBackground(Theme.surface)
+        .onChange(of: ble.bridgeState) { s in
+            if s == .live { started = false }   // nach dem Update wieder da
         }
     }
 }

@@ -75,6 +75,7 @@ final class BLEManager: NSObject, ObservableObject {
     // Bridge — muss zur Firmware passen (SERVICE_UUID / DATA_UUID)
     static let bridgeService = CBUUID(string: "C172A000-2C60-4E6B-9F1D-7A3E5B8C0001")
     static let bridgeData    = CBUUID(string: "C172A001-2C60-4E6B-9F1D-7A3E5B8C0001")
+    static let bridgeCtrl    = CBUUID(string: "C172A002-2C60-4E6B-9F1D-7A3E5B8C0001")  // ab Bridge v3
     // 123ignition, aeltere Modelle (BlueRadios BRSP, siehe Tune123.swift)
     static let tuneService = CBUUID(string: Tune123.serviceUUIDString)
     static let tuneMode    = CBUUID(string: Tune123.modeUUIDString)
@@ -100,6 +101,8 @@ final class BLEManager: NSObject, ObservableObject {
     @Published private(set) var scatter: [ScatterPoint] = []
     @Published private(set) var warning: String?      // Bridge / Bluetooth allgemein
     @Published private(set) var tuneWarning: String?   // 123ignition
+    @Published private(set) var bridgeVersion: String?     // z. B. "Bridge 3.0", nil = unbekannt
+    @Published private(set) var bridgeCanUpdate = false    // Bridge v3+: Update-Modus per App
 
     var isDemo: Bool { bridgeState == .demo }
     var noSignal: Bool { bridgeState == .live && warning != nil }
@@ -114,6 +117,7 @@ final class BLEManager: NSObject, ObservableObject {
     private var bridge: CBPeripheral?
     private var ignition: CBPeripheral?
     private var tuneRXChar: CBCharacteristic?
+    private var bridgeCtrlChar: CBCharacteristic?
 
     private var target: Reading?
     private var lastPacket = Date.distantPast
@@ -139,6 +143,20 @@ final class BLEManager: NSObject, ObservableObject {
         let t = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(t, forMode: .common)
         timer = t
+    }
+
+    /// Bridge v3+ in den Update-Modus schicken (WLAN "Citroen-Update").
+    /// Die Bridge startet dafuer neu und ist so lange nicht per Bluetooth da.
+    @discardableResult
+    func startBridgeUpdate() -> Bool {
+        guard let c = bridgeCtrlChar, let p = bridge, bridgeState == .live else { return false }
+        write(Data("UPDATE".utf8), to: c, on: p)
+        return true
+    }
+
+    private func forgetBridgeControl() {
+        bridgeCtrlChar = nil
+        bridgeCanUpdate = false
     }
 
     /// Punktewolke leeren, z. B. nach einer Aenderung am Vergaser
@@ -168,6 +186,7 @@ final class BLEManager: NSObject, ObservableObject {
                 bridge = nil
                 ignition = nil
                 tuneRXChar = nil
+                forgetBridgeControl()
                 old.forEach { central.cancelPeripheralConnection($0) }
             }
             bridge = nil
@@ -378,6 +397,7 @@ extension BLEManager: CBCentralManagerDelegate {
             bridge = nil
             ignition = nil
             tuneRXChar = nil
+            forgetBridgeControl()
             target = nil
             tuneTarget = nil
             shown = nil
@@ -421,7 +441,7 @@ extension BLEManager: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
-        if peripheral == bridge { bridge = nil }
+        if peripheral == bridge { bridge = nil; forgetBridgeControl() }
         if peripheral == ignition { ignition = nil; tuneRXChar = nil }
         retryLater()
     }
@@ -431,6 +451,7 @@ extension BLEManager: CBCentralManagerDelegate {
         // Verbindungswunsch bleibt offen: iOS verbindet von selbst neu,
         // sobald das Geraet wieder Strom hat und in Reichweite ist.
         if peripheral == bridge {
+            forgetBridgeControl()
             bridgeState = .connecting
             central.connect(peripheral, options: nil)
         } else if peripheral == ignition {
@@ -445,7 +466,7 @@ extension BLEManager: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         let wanted: [CBUUID: [CBUUID]]
         if peripheral == bridge {
-            wanted = [Self.bridgeService: [Self.bridgeData]]
+            wanted = [Self.bridgeService: [Self.bridgeData, Self.bridgeCtrl]]
         } else if peripheral == ignition {
             wanted = [Self.tuneService: [Self.tuneMode, Self.tuneRX, Self.tuneTX],
                       Self.nusService:  [Self.nusRX, Self.nusTX]]
@@ -469,6 +490,15 @@ extension BLEManager: CBPeripheralDelegate {
             }
             peripheral.setNotifyValue(true, for: ch)
             peripheral.readValue(for: ch)
+            // Ab v3: Version lesen, Update-Modus moeglich
+            if let ctrl = chars.first(where: { $0.uuid == Self.bridgeCtrl }) {
+                bridgeCtrlChar = ctrl
+                bridgeCanUpdate = true
+                peripheral.readValue(for: ctrl)
+            } else {
+                forgetBridgeControl()
+                bridgeVersion = nil
+            }
             lastPacket = Date()
             bridgeState = .live
 
@@ -493,7 +523,9 @@ extension BLEManager: CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         guard error == nil, let data = characteristic.value else { return }
-        if peripheral == bridge, bridgeState == .live, characteristic.uuid == Self.bridgeData {
+        if peripheral == bridge, characteristic.uuid == Self.bridgeCtrl {
+            bridgeVersion = String(data: data, encoding: .utf8)
+        } else if peripheral == bridge, bridgeState == .live, characteristic.uuid == Self.bridgeData {
             receiveBridge(data)
         } else if peripheral == ignition, tuneState == .live,
                   characteristic.uuid == Self.tuneTX || characteristic.uuid == Self.nusTX {

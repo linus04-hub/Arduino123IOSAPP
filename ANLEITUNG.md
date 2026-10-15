@@ -12,7 +12,7 @@ Ab iOS 16.1.
 | **Live** | Anzeigen in vier Ansichten (Standard, Rundinstrumente, Fokus, Abstimmung), oben rechts umschaltbar. Unten die Leiste mit Aufnahme, GPS-Tempo und **Markierung**. |
 | **Fahrten** | Alle aufgezeichneten Fahrten. Pro Fahrt: Zusammenfassung, Karte, Diagramm mit wählbarem Wert, Markierungen mit Werten und Notiz, CSV teilen, als Messreihe speichern. |
 | **Abstimmung** | **Kennfeld** als weiche Farbkarte, umschaltbar zwischen Lambda, Streuung und Anzahl; Antippen zeigt Wert und Anzahl der Zelle, **Zündung** (Zündwinkel über Drehzahl), **Vergleich** (zwei Messreihen: Kennfeld-Differenz und Kurven vorher/nachher). |
-| **Einstellungen** | Nachtmodus, Ansicht, Live-Aktivität, GPS, automatische Aufnahme. |
+| **Einstellungen** | Nachtmodus, Ansicht, Live-Aktivität, GPS, automatische Aufnahme, Bridge-Version und „Bridge aktualisieren“. |
 
 ## Funktionen
 
@@ -33,6 +33,9 @@ Ab iOS 16.1.
   *Lambda* zeigt das mittlere Gemisch (blau fett, grün 1.00, orange/rot mager), *Streuung*
   wie unruhig es ist, *Anzahl* wie viele Werte drinstecken. Die Streuung wird ab Version 1.2
   erfasst; ältere Messreihen bleiben in dieser Ansicht dunkel.
+- **Bridge aktualisieren** (ab Bridge v3): Einstellungen › Bridge › „Bridge aktualisieren“.
+  Die Bridge öffnet das WLAN „Citroen-Update“ (Passwort `2cv-bridge`), dann in Safari
+  192.168.4.1 öffnen und die .bin aus der Arduino IDE hochladen. Kein Ausbauen nötig.
 - **Nachtmodus**: dunkel und warm, an, aus oder automatisch zwischen 20 und 7 Uhr.
 - Werte laufen mit Bildschirmrate (bis 120 Hz) weich mit.
 - „Demo-Werte zeigen“ zum Testen ohne Hardware. Demo-Werte werden nicht aufgezeichnet.
