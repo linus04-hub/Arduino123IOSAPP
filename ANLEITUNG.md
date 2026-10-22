@@ -50,6 +50,18 @@ Ab iOS 16.1.
 - Werte laufen mit Bildschirmrate (bis 120 Hz) weich mit.
 - „Demo-Werte zeigen“ zum Testen ohne Hardware. Demo-Werte werden nicht aufgezeichnet.
 
+## Installieren und Updates über AltStore
+
+Jeder Build auf dem Hauptzweig veröffentlicht ein Release mit der .ipa und einer
+AltStore-Quelle. Die Quelle einmal in AltStore hinzufügen (Tab „Quellen“ › „+“):
+
+```
+https://github.com/linus04-hub/Arduino123IOSAPP/releases/latest/download/altstore-source.json
+```
+
+Danach steht die App dort zum Installieren, und neue Versionen erscheinen unter
+„My Apps“ mit „Aktualisieren“. Die Build-Nummer zählt bei jedem Build hoch.
+
 ## .ipa bauen
 
 Über GitHub (Windows): Dateien ins Repo hochladen, **Actions → Build IPA** baut die .ipa,

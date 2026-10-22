@@ -1,9 +1,16 @@
+# Baut CitroenAnzeige.ipa auf einem Mac-Server von GitHub.
+# Auf dem Hauptzweig wird zusaetzlich ein Release mit der .ipa und der
+# AltStore-Quelle veroeffentlicht. AltStore-Quelle (einmal hinzufuegen):
+#   https://github.com/linus04-hub/Arduino123IOSAPP/releases/latest/download/altstore-source.json
 name: Build IPA
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -13,6 +20,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: App bauen
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
         run: |
           chmod +x build_ipa.sh
           ./build_ipa.sh
@@ -22,3 +31,19 @@ jobs:
           name: CitroenAnzeige-ipa
           path: CitroenAnzeige.ipa
           retention-days: 30
+
+      - name: Release und AltStore-Quelle veroeffentlichen
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APP=build/Release-iphoneos/CitroenAnzeige.app
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Info.plist")
+          TAG="v${VERSION}-${{ github.run_number }}"
+          URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/CitroenAnzeige.ipa"
+          python3 .github/scripts/altstore_source.py "$APP" CitroenAnzeige.ipa "$URL" altstore-source.json
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" CitroenAnzeige.ipa altstore-source.json \
+            --title "Citroën ${VERSION} (Build ${{ github.run_number }})" \
+            --notes "$(git log -1 --pretty=%s)" \
+            --latest
