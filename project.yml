@@ -24,6 +24,8 @@ targets:
       path: Info.plist
       properties:
         CFBundleDisplayName: Citroën
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"   # sonst steht immer 1.0 (1) drin
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
         NSBluetoothAlwaysUsageDescription: Verbindet sich mit der Anzeige im Auto und der 123ignition, um Lambda, Öl, Tank, Drehzahl und Zündwinkel anzuzeigen.
         NSLocationWhenInUseUsageDescription: Für Tempo und Strecke im Fahrtenschreiber.
@@ -56,6 +58,8 @@ targets:
       path: CitroenWidgets-Info.plist     # ausserhalb des Quellordners
       properties:
         CFBundleDisplayName: Citroën
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
