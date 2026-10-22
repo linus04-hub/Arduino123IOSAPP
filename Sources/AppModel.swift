@@ -98,7 +98,15 @@ final class AppModel: ObservableObject {
         let wantGPS = Self.flag(SettingKey.gps, default: true) && (recorder.isRecording || ble.anyLive)
         if location.enabled != wantGPS { location.enabled = wantGPS }
 
-        guard !ble.isDemo else { return }      // Demo-Werte nicht aufzeichnen
+        if ble.isDemo {
+            // Demo-Werte nicht aufzeichnen. Nur fuer Bildschirmfotos im Simulator
+            // (Startparameter -screenshotRecordDemo YES) fuellt die Demo die Messreihe.
+            if UserDefaults.standard.bool(forKey: "screenshotRecordDemo") {
+                tuning.add(s)
+                tipIns.add(s)
+            }
+            return
+        }
         tuning.add(s)
         tipIns.add(s)
         let running = (s.rpm ?? 0) >= 300 || (s.oilP ?? 0) >= 0.3

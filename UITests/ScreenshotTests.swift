@@ -18,7 +18,8 @@ final class ScreenshotTests: XCTestCase {
 
     private func launch(layout: String) {
         app.terminate()
-        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE", "-layout", layout]
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE", "-layout", layout,
+                               "-screenshotRecordDemo", "YES"]
         app.launch()
         dismissAlerts()
         startDemo()
@@ -77,7 +78,7 @@ final class ScreenshotTests: XCTestCase {
     }
 
     private func segment(_ title: String) {
-        let b = app.segmentedControls.buttons[title]
+        let b = app.segmentedControls.firstMatch.buttons[title]   // oberste Leiste
         if b.waitForExistence(timeout: 5) { b.tap() }
         sleep(1)
     }
@@ -100,7 +101,8 @@ final class ScreenshotTests: XCTestCase {
         shot("01-live-standard")
         scrollShot("02-live-standard-unten")
 
-        // Abstimmung
+        // Abstimmung: etwas warten, damit sich Kennfeld und Zuendkurve fuellen
+        sleep(40)
         tab("Abstimmung")
         segment("Kennfeld")
         shot("10-kennfeld")
