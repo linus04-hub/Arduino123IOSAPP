@@ -61,6 +61,9 @@ struct TuningSession: Codable, Identifiable, Hashable {
     var advanceBins: [TuneCell] = Array(repeating: TuneCell(), count: TuningSession.advBins)
     var lambdaPoints: [TunePoint] = []
     var advancePoints: [TunePoint] = []
+    /// Zuendwinkel je Kennfeld-Zelle. Erst ab Version 1.4 erfasst, aeltere
+    /// Messreihen haben das Feld nicht (deshalb optional).
+    var advanceCells: [[TuneCell]]?
 
     static let cols = 11          // Spalten 1000 … 6000 U/min, je 500
     static let rows = 8           // Zeilen 20 … 100 kPa, je 10
@@ -75,6 +78,10 @@ struct TuningSession: Codable, Identifiable, Hashable {
     static func col(_ rpm: Double) -> Int { min(cols - 1, max(0, Int((rpm - 750) / 500))) }
     static func row(_ kPa: Double) -> Int { min(rows - 1, max(0, Int((kPa - 20) / 10))) }
     static func advBin(_ rpm: Double) -> Int { min(advBins - 1, max(0, Int((rpm - 500) / 250))) }
+
+    static func emptyCells() -> [[TuneCell]] {
+        Array(repeating: Array(repeating: TuneCell(), count: cols), count: rows)
+    }
 
     var lambdaCount: Int {
         var n = 0
@@ -100,6 +107,10 @@ struct TuningSession: Codable, Identifiable, Hashable {
         }
         if let a = advance {
             advanceBins[Self.advBin(r)].add(a)
+            if let m = map {
+                if advanceCells == nil { advanceCells = Self.emptyCells() }
+                advanceCells?[Self.row(m)][Self.col(r)].add(a)
+            }
             advancePoints.append(TunePoint(r: Float(r), v: Float(a), m: mf))
             if advancePoints.count > Self.maxPoints { advancePoints.removeFirst(advancePoints.count - Self.maxPoints) }
         }
@@ -116,6 +127,13 @@ struct TuningSession: Codable, Identifiable, Hashable {
 
     /// Anzahl Lambda-Werte einer Zelle
     func count(row: Int, col: Int) -> Int { lambdaCells[row][col].count }
+
+    /// Mittlerer Zuendwinkel einer Kennfeld-Zelle, nil bei zu wenigen Werten
+    func advance(row: Int, col: Int) -> Double? {
+        guard let cells = advanceCells else { return nil }
+        let c = cells[row][col]
+        return c.count >= Self.minCount ? c.sum / Double(c.count) : nil
+    }
 
     /// Lambda-Mittel je 500 U/min ueber alle Lasten
     var lambdaCurve: [(Double, Double)] {

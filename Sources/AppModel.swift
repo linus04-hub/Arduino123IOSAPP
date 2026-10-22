@@ -29,6 +29,8 @@ final class AppModel: ObservableObject {
     let location = LocationManager()
     let recorder = TripRecorder()
     let tuning = TuningStore()
+    let idle = IdleAssistant()
+    let tipIns = TipInAnalyzer()
     private let live = LiveActivityController()
 
     @Published private(set) var isNight = false
@@ -98,6 +100,7 @@ final class AppModel: ObservableObject {
 
         guard !ble.isDemo else { return }      // Demo-Werte nicht aufzeichnen
         tuning.add(s)
+        tipIns.add(s)
         let running = (s.rpm ?? 0) >= 300 || (s.oilP ?? 0) >= 0.3
         recorder.autoCheck(engineRunning: running,
                            enabled: Self.flag(SettingKey.autoRecord, default: true),

@@ -11,7 +11,7 @@ Ab iOS 16.1.
 |---|---|
 | **Live** | Anzeigen in vier Ansichten (Standard, Rundinstrumente, Fokus, Abstimmung), oben rechts umschaltbar. Unten die Leiste mit Aufnahme, GPS-Tempo und **Markierung**. |
 | **Fahrten** | Alle aufgezeichneten Fahrten. Pro Fahrt: Zusammenfassung, Karte, Diagramm mit wählbarem Wert, Markierungen mit Werten und Notiz, CSV teilen, als Messreihe speichern. |
-| **Abstimmung** | **Kennfeld** als weiche Farbkarte, umschaltbar zwischen Lambda, Streuung und Anzahl; Antippen zeigt Wert und Anzahl der Zelle, **Zündung** (Zündwinkel über Drehzahl), **Vergleich** (zwei Messreihen: Kennfeld-Differenz und Kurven vorher/nachher). |
+| **Abstimmung** | **Kennfeld** als weiche Farbkarte, umschaltbar zwischen Lambda, Streuung und Anzahl; Antippen zeigt Wert und Anzahl der Zelle, **Zündung** (Zündwinkel über Drehzahl), **Vergleich** (zwei Messreihen: Kennfeld-Differenz und Kurven vorher/nachher), **Werkzeuge** (Leerlauf-Assistent, Gasstöße, Düsen-Rechner). |
 | **Einstellungen** | Nachtmodus, Ansicht, Live-Aktivität, GPS, automatische Aufnahme, Bridge-Version und „Bridge aktualisieren“. |
 
 ## Funktionen
@@ -33,6 +33,16 @@ Ab iOS 16.1.
   *Lambda* zeigt das mittlere Gemisch (blau fett, grün 1.00, orange/rot mager), *Streuung*
   wie unruhig es ist, *Anzahl* wie viele Werte drinstecken. Die Streuung wird ab Version 1.2
   erfasst; ältere Messreihen bleiben in dieser Ansicht dunkel.
+- **Zündwinkel im Kennfeld**: Ansicht „Zündung“ oder Schalter „Zündwinkel einblenden“, dann steht
+  der mittlere Zündwinkel in jeder Zelle über der Lambda-Karte. Wird ab Version 1.4 erfasst.
+- **Leerlauf-Assistent** (Abstimmung › Werkzeuge): Gemischschraube in kleinen Schritten drehen
+  und den passenden Knopf tippen. Die App wartet 10 s, mittelt dann 10 s Lambda und Drehzahl und
+  markiert die Stellung mit der höchsten Drehzahl bei ruhigem Lambda.
+- **Gasstöße**: erkennt zügiges Gasgeben (Lambda schlägt aus, Drehzahl steigt danach) und zeigt,
+  wie weit und wie lange das Gemisch mager oder fett wird. Hilft bei der Beschleunigerpumpe.
+  Ohne Drosselklappen-Sensor eine Schätzung.
+- **Düsen-Rechner**: d_neu ≈ d_alt × √(λ_ist / λ_soll), mit λ_ist aus dem Kennfeld je Vergaserkreis
+  oder aus einer angetippten Zelle. Faustregel, Luftkorrektur und Schwimmerstand spielen mit.
 - **Bridge aktualisieren** (ab Bridge v3): Einstellungen › Bridge › „Bridge aktualisieren“.
   Die Bridge öffnet das WLAN „Citroen-Update“ (Passwort `2cv-bridge`), dann in Safari
   192.168.4.1 öffnen und die .bin aus der Arduino IDE hochladen. Kein Ausbauen nötig.

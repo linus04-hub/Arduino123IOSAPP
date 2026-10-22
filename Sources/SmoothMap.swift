@@ -8,7 +8,7 @@ import CoreGraphics
 // Antippen einer Stelle zeigt Wert, Streuung und Anzahl dieser Zelle.
 
 enum MapMode: String, CaseIterable, Identifiable {
-    case lambda, spread, count
+    case lambda, spread, count, advance
 
     var id: String { rawValue }
 
@@ -17,6 +17,7 @@ enum MapMode: String, CaseIterable, Identifiable {
         case .lambda: return "Lambda"
         case .spread: return "Streuung"
         case .count:  return "Anzahl"
+        case .advance: return "Zündung"
         }
     }
 
@@ -31,6 +32,9 @@ enum MapMode: String, CaseIterable, Identifiable {
                     (0.06, RGB(231, 76, 60))]
         case .count:
             return [(0.0, RGB(40, 44, 80)), (0.5, RGB(52, 120, 210)), (1.0, RGB(140, 225, 255))]
+        case .advance:
+            return [(5, RGB(52, 73, 140)), (15, RGB(64, 160, 220)), (25, RGB(120, 210, 160)),
+                    (35, RGB(240, 200, 80)), (40, RGB(253, 140, 0))]
         }
     }
 }
@@ -102,6 +106,8 @@ struct MapData {
                 case .count:
                     let n = session.count(row: r, col: c)
                     v[r][c] = n > 0 ? log(1 + Double(n)) / logMax : nil
+                case .advance:
+                    v[r][c] = session.advance(row: r, col: c)
                 }
             }
         }
@@ -202,6 +208,7 @@ struct SmoothMap: View {
     var liveRPM: Double? = nil
     var liveKPa: Double? = nil
     var selected: MapCell? = nil
+    var advanceLabels: [[Double?]]? = nil   // Zuendwinkel als Zahl in jeder Zelle
     var onTap: (MapCell) -> Void = { _ in }
 
     static let labelW: CGFloat = 26
@@ -299,6 +306,21 @@ struct SmoothMap: View {
         ctx.draw(Text("kPa").font(.system(size: 8)).foregroundColor(Theme.muted),
                  at: CGPoint(x: plot.minX - 5, y: size.height), anchor: .bottomTrailing)
 
+        // Zuendwinkel als Zahl ueber die Karte legen
+        if let labels = advanceLabels {
+            let font = Font.system(size: 9, weight: .bold).monospacedDigit()
+            for r in 0..<rows {
+                for c in 0..<cols {
+                    guard let a = labels[r][c] else { continue }
+                    let box = rect(r, c)
+                    let tag = CGRect(x: box.midX - 12, y: box.midY - 7, width: 24, height: 14)
+                    ctx.fill(Path(roundedRect: tag, cornerRadius: 3), with: .color(Color.black.opacity(0.5)))
+                    ctx.draw(Text(String(format: "%.0f°", a)).font(font).foregroundColor(Color.white),
+                             at: CGPoint(x: box.midX, y: box.midY))
+                }
+            }
+        }
+
         // angetippte Zelle
         if let s = selected {
             let r = rect(s.row, s.col).insetBy(dx: 1, dy: 1)
@@ -359,6 +381,7 @@ struct ColorScale: View {
         case .lambda: return ("0.90 fett", "1.00", "mager 1.10")
         case .spread: return ("ruhig", "±0.03", "unruhig ±0.06")
         case .count:  return ("wenig", "", maxCount > 0 ? "\(maxCount) Werte" : "viel")
+        case .advance: return ("5°", "22°", "40° vor OT")
         }
     }
 }
@@ -370,7 +393,15 @@ struct KennfeldPanel: View {
     let map: Double?
 
     @AppStorage("mapMode") private var mode: MapMode = .lambda
+    @AppStorage("mapShowAdvance") private var showAdvance = false
     @State private var selected: MapCell?
+
+    /// Zuendwinkel je Zelle fuer die Zahlen ueber der Karte
+    private var advanceGrid: [[Double?]] {
+        (0..<TuningSession.rows).map { r in
+            (0..<TuningSession.cols).map { c in session.advance(row: r, col: c) }
+        }
+    }
 
     var body: some View {
         let data = MapData(session: session, mode: mode)
@@ -383,7 +414,12 @@ struct KennfeldPanel: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                SmoothMap(data: data, liveRPM: rpm, liveKPa: map, selected: selected) { cell in
+                Toggle("Zündwinkel einblenden", isOn: $showAdvance)
+                    .font(.system(size: 13))
+                    .foregroundColor(Theme.fg)
+                    .tint(Theme.accent)
+                SmoothMap(data: data, liveRPM: rpm, liveKPa: map, selected: selected,
+                          advanceLabels: showAdvance ? advanceGrid : nil) { cell in
                     selected = (selected == cell) ? nil : cell
                 }
                 Text("Drehzahl × 1000 U/min · dunkel = noch zu wenige Werte")
@@ -425,38 +461,53 @@ struct KennfeldPanel: View {
         let n = session.count(row: cell.row, col: cell.col)
         let lam = session.lambda(row: cell.row, col: cell.col)
         let sp = session.spread(row: cell.row, col: cell.col)
+        let adv = session.advance(row: cell.row, col: cell.col)
         let lo = TuningSession.rowLow(cell.row)
         let place = String(format: "%.0f U/min · %.0f–%.0f kPa", TuningSession.colCenter(cell.col), lo, lo + 10)
         let value = lam.map { String(format: "λ %.3f", $0) } ?? "zu wenige Werte"
         let valueColor: Color = lam.map { RGB.ramp(MapMode.lambda.stops, $0).color } ?? Theme.muted
-        return HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(caption)
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1)
-                    .foregroundColor(Theme.muted)
-                Text(place)
-                    .font(.system(size: 13).monospacedDigit())
-                    .foregroundColor(Theme.fg)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(caption)
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(1)
+                        .foregroundColor(Theme.muted)
+                    Text(place)
+                        .font(.system(size: 13).monospacedDigit())
+                        .foregroundColor(Theme.fg)
+                }
+                Spacer(minLength: 4)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(value)
+                        .font(.system(size: 17, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundColor(valueColor)
+                    Text(detail(n: n, spread: sp, advance: adv))
+                        .font(.system(size: 11).monospacedDigit())
+                        .foregroundColor(Theme.muted)
+                }
             }
-            Spacer(minLength: 4)
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(value)
-                    .font(.system(size: 17, weight: .bold, design: .rounded).monospacedDigit())
-                    .foregroundColor(valueColor)
-                Text(detail(n: n, spread: sp))
-                    .font(.system(size: 11).monospacedDigit())
-                    .foregroundColor(Theme.muted)
+            if lam != nil, CarbCircuit.of(row: cell.row, col: cell.col) != nil {
+                NavigationLink {
+                    JetCalcView(sessions: [session], cell: cell)
+                } label: {
+                    Label("Düse für diese Stelle berechnen", systemImage: "function")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Theme.accent)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(10)
         .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private func detail(n: Int, spread: Double?) -> String {
-        let werte = n == 1 ? "1 Wert" : "\(n) Werte"
-        guard let spread else { return werte }
-        return String(format: "±%.3f · ", spread) + werte
+    private func detail(n: Int, spread: Double?, advance: Double?) -> String {
+        var parts: [String] = []
+        if let spread { parts.append(String(format: "±%.3f", spread)) }
+        parts.append(n == 1 ? "1 Wert" : "\(n) Werte")
+        if let advance { parts.append(String(format: "%.0f° vor OT", advance)) }
+        return parts.joined(separator: " · ")
     }
 
     private var explanation: String {
@@ -467,6 +518,8 @@ struct KennfeldPanel: View {
             return "Wie stark Lambda in diesem Bereich schwankt. Rot heißt unruhig: Dort springt das Gemisch, zum Beispiel beim Übergang oder beim Gasgeben. Wird erst ab Version 1.2 erfasst, ältere Messreihen bleiben hier dunkel."
         case .count:
             return "Wie viele Messwerte in jedem Bereich stecken. Wo wenig gemessen wurde, ist die Farbe im Lambda-Bild noch unsicher."
+        case .advance:
+            return "Mittlerer Zündwinkel der 123 je Drehzahl und Last, mit Unterdruckverstellung. „Zündwinkel einblenden“ legt die Zahlen auch über die Lambda-Karte. Wird ab Version 1.4 erfasst, ältere Messreihen bleiben hier dunkel."
         }
     }
 }

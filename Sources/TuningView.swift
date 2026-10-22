@@ -3,7 +3,7 @@ import SwiftUI
 // ── Tab "Abstimmung": Kennfeld, Zuendkurve, Vorher/Nachher ───────
 
 enum TuningPage: String, CaseIterable, Identifiable {
-    case map, ignition, compare
+    case map, ignition, compare, tools
 
     var id: String { rawValue }
 
@@ -12,6 +12,7 @@ enum TuningPage: String, CaseIterable, Identifiable {
         case .map:      return "Kennfeld"
         case .ignition: return "Zündung"
         case .compare:  return "Vergleich"
+        case .tools:    return "Werkzeuge"
         }
     }
 }
@@ -19,6 +20,8 @@ enum TuningPage: String, CaseIterable, Identifiable {
 struct TuningView: View {
     @ObservedObject var tuning: TuningStore
     @ObservedObject var ble: BLEManager
+    let idle: IdleAssistant
+    let tipIns: TipInAnalyzer
 
     @State private var page: TuningPage = .map
     @State private var askName = false
@@ -50,6 +53,8 @@ struct TuningView: View {
                                       advance: ble.tune?.advance, byLoad: byLoad)
                     case .compare:
                         ComparePanel(tuning: tuning, before: $before, after: $after)
+                    case .tools:
+                        ToolsPanel(tuning: tuning, ble: ble, idle: idle, tipIns: tipIns)
                     }
                 }
                 .padding(16)
@@ -136,6 +141,69 @@ struct TuningView: View {
                     .frame(height: 210)
             }
         }
+    }
+}
+
+// ── Werkzeuge: Leerlauf-Assistent, Gasstoesse, Duesen-Rechner ────
+struct ToolsPanel: View {
+    @ObservedObject var tuning: TuningStore
+    @ObservedObject var ble: BLEManager
+    let idle: IdleAssistant
+    @ObservedObject var tipIns: TipInAnalyzer
+
+    var body: some View {
+        VStack(spacing: 10) {
+            toolLink(title: "Leerlauf-Assistent",
+                     subtitle: "Gemischschraube Schritt für Schritt einstellen",
+                     symbol: "speedometer") {
+                IdleAssistantView(ble: ble, idle: idle)
+            }
+            toolLink(title: "Gasstöße",
+                     subtitle: tipIns.events.isEmpty ? "Beschleunigerpumpe beurteilen"
+                                                     : "\(tipIns.events.count) erkannt",
+                     symbol: "waveform.path.ecg") {
+                TipInView(analyzer: tipIns)
+            }
+            toolLink(title: "Düsen-Rechner",
+                     subtitle: "Neue Düsengröße aus dem Kennfeld",
+                     symbol: "function") {
+                JetCalcView(sessions: tuning.all)
+            }
+            Text("Zündwinkel im Kennfeld: unter „Kennfeld“ den Schalter „Zündwinkel einblenden“ oder die Ansicht „Zündung“ wählen.")
+                .font(.system(size: 12))
+                .foregroundColor(Theme.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
+        }
+    }
+
+    private func toolLink<Destination: View>(title: String, subtitle: String, symbol: String,
+                                             @ViewBuilder destination: () -> Destination) -> some View {
+        NavigationLink {
+            destination()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(Theme.accent)
+                    .frame(width: 32)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(Theme.fg)
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.muted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Theme.muted)
+            }
+            .padding(14)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
 

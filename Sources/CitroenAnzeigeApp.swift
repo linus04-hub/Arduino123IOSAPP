@@ -31,7 +31,7 @@ struct RootView: View {
                 .tabBarStyle()
                 .tabItem { Label("Fahrten", systemImage: "car.fill") }
                 .tag(1)
-            TuningView(tuning: model.tuning, ble: model.ble)
+            TuningView(tuning: model.tuning, ble: model.ble, idle: model.idle, tipIns: model.tipIns)
                 .tabBarStyle()
                 .tabItem { Label("Abstimmung", systemImage: "chart.xyaxis.line") }
                 .tag(2)
