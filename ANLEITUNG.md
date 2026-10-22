@@ -11,7 +11,7 @@ Ab iOS 16.1.
 |---|---|
 | **Live** | Anzeigen in vier Ansichten (Standard, Rundinstrumente, Fokus, Abstimmung), oben rechts umschaltbar. Unten die Leiste mit Aufnahme, GPS-Tempo und **Markierung**. |
 | **Fahrten** | Alle aufgezeichneten Fahrten. Pro Fahrt: Zusammenfassung, Karte, Diagramm mit wählbarem Wert, Markierungen mit Werten und Notiz, CSV teilen, als Messreihe speichern. |
-| **Abstimmung** | **Kennfeld** als weiche Farbkarte, umschaltbar zwischen Lambda, Streuung und Anzahl; Antippen zeigt Wert und Anzahl der Zelle, **Zündung** (Zündwinkel über Drehzahl), **Vergleich** (zwei Messreihen: Kennfeld-Differenz und Kurven vorher/nachher), **Werkzeuge** (Leerlauf-Assistent, Gasstöße, Düsen-Rechner). |
+| **Abstimmung** | **Kennfeld** als weiche Farbkarte, umschaltbar zwischen Lambda, Streuung und Anzahl; Antippen zeigt Wert und Anzahl der Zelle, **Zündung** (Zündwinkel über Drehzahl), **Vergleich** (zwei Messreihen: Kennfeld-Differenz und Kurven vorher/nachher), **Werkzeuge** (Zündkurven der 123, Leerlauf-Assistent, Gasstöße, Düsen-Rechner). |
 | **Einstellungen** | Nachtmodus, Ansicht, Live-Aktivität, GPS, automatische Aufnahme, Bridge-Version und „Bridge aktualisieren“. |
 
 ## Funktionen
@@ -35,6 +35,12 @@ Ab iOS 16.1.
   erfasst; ältere Messreihen bleiben in dieser Ansicht dunkel.
 - **Zündwinkel im Kennfeld**: Ansicht „Zündung“ oder Schalter „Zündwinkel einblenden“, dann steht
   der mittlere Zündwinkel in jeder Zelle über der Lambda-Karte. Wird ab Version 1.4 erfasst.
+- **Zündkurven der 123** (Abstimmung › Werkzeuge oder unter „Zündung“): liest die programmierte
+  Fliehkraft- und Unterdruckkurve, ab welcher Drehzahl der Unterdruck wirkt, Drehzahlbegrenzer,
+  Wegfahrsperre und Firmware aus der Zündung, wie es die 123-App beim Verbinden tut. Nur bei
+  stehendem Motor, automatisch beim Verbinden (abschaltbar) oder per Knopf. Dazu Soll gegen Ist
+  und die Messpunkte über den Kurven. Unter „Zündung“ liegt die Fliehkraftkurve gestrichelt über
+  der gemessenen.
 - **Leerlauf-Assistent** (Abstimmung › Werkzeuge): Gemischschraube in kleinen Schritten drehen
   und den passenden Knopf tippen. Die App wartet 10 s, mittelt dann 10 s Lambda und Drehzahl und
   markiert die Stellung mit der höchsten Drehzahl bei ruhigem Lambda.
@@ -98,7 +104,11 @@ beide, die Daten sind gleich.
 
 - Die 123 nimmt nur **eine** Bluetooth-Verbindung an. Läuft die 123-App,
   findet diese App die Zündung nicht (und umgekehrt).
-- Die App sendet nur Keepalives (`$`). Sie liest keinen Pincode und ändert nichts
-  an Kurven, Wegfahrsperre oder Tuning.
+- Die App sendet nur Keepalives (`$`) und die Lesebefehle der 123-App (`10@` bis `13@`, `v@`).
+  Sie ändert nichts an Kurven, Begrenzer, Wegfahrsperre oder Tuning.
+- In Block `11@` steckt neben Begrenzer und Kurvenpunkt 8–10 auch der Pincode. Die App nullt
+  ihn direkt beim Empfang, zeigt und speichert ihn nicht.
+- Die Lesebefehle sind für die ältere 123 (BRSP) belegt. Antwortet eine neuere 123 nicht,
+  steht unter „Zündkurven der 123“ ein Hinweis, sonst passiert nichts.
 - Drehzahlgrenzen für die Farben stehen in `Sources/Theme.swift`
   (`rpmWarn`, `rpmCrit`, `rpmScaleMax`).

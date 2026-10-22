@@ -70,6 +70,14 @@ enum LinkState: Equatable {
     case searching, connecting, live, demo, bluetoothOff, unauthorized
 }
 
+/// Lesen der Programmierung der 123 (Kurven, Begrenzer, Version)
+enum ProgramRead: Equatable {
+    case idle
+    case reading(Int)        // Schritt 0–4 (Block 0–3, Version)
+    case done
+    case failed
+}
+
 // ── Bluetooth: Bridge (Lambda/Oel/Tank) und 123ignition gleichzeitig ──
 final class BLEManager: NSObject, ObservableObject {
     // Bridge — muss zur Firmware passen (SERVICE_UUID / DATA_UUID)
@@ -91,6 +99,11 @@ final class BLEManager: NSObject, ObservableObject {
     static let scatterMax = 1200                      // 2 Punkte/s -> 10 min
     static let bridgeStaleAfter: TimeInterval = 3
     static let tuneStaleAfter: TimeInterval = 5       // 123 sendet nur ca. 3 Frames/s, reihum
+    static let readTimeout: TimeInterval = 2.5        // je Lesebefehl, einmal wiederholt
+    static let autoReadDelay: TimeInterval = 2.5      // nach dem Verbinden, damit die Drehzahl schon da ist
+    static let engineRunningRPM: Double = 300         // darueber wird nicht gelesen (wie die 123-App)
+    static let programKey = "tune123Program"
+    static let autoReadKey = "tuneAutoRead"
 
     @Published private(set) var bridgeState: LinkState = .searching
     @Published private(set) var tuneState: LinkState = .searching
@@ -103,6 +116,8 @@ final class BLEManager: NSObject, ObservableObject {
     @Published private(set) var tuneWarning: String?   // 123ignition
     @Published private(set) var bridgeVersion: String?     // z. B. "Bridge 3.0", nil = unbekannt
     @Published private(set) var bridgeCanUpdate = false    // Bridge v3+: Update-Modus per App
+    @Published private(set) var tuneProgram: Tune123Program?   // zuletzt gelesene Programmierung der 123
+    @Published private(set) var programRead: ProgramRead = .idle
 
     var isDemo: Bool { bridgeState == .demo }
     var noSignal: Bool { bridgeState == .live && warning != nil }
@@ -133,10 +148,20 @@ final class BLEManager: NSObject, ObservableObject {
     private var demoCount = 0
     private var tuneDemo = Tune123Demo()
     private var timer: Timer?
+
+    // Lesen der Programmierung
+    private var readStep = -1                  // -1 = liest nicht
+    private var readTries = 0
+    private var readSent = Date.distantPast
+    private var readBlocks: [Int: [UInt8]] = [:]
+    private var readVersionText: String?
+    private var tuneLiveSince = Date.distantPast
+    private var autoReadPending = false
     private var idleTimerOff = false
 
     override init() {
         super.init()
+        tuneProgram = Self.loadProgram()
         central = CBCentralManager(delegate: self, queue: .main)
         // 10 Hz fuer Demo, Keepalive, Verlauf und Warnungen. Die Anzeigen
         // animieren unabhaengig davon mit Bildschirmrate.
@@ -159,6 +184,110 @@ final class BLEManager: NSObject, ObservableObject {
         bridgeCanUpdate = false
     }
 
+    // ── Programmierung der 123 lesen (nur Lesebefehle) ────────────
+    var engineRunning: Bool { (tuneTarget?.rpm ?? 0) >= Self.engineRunningRPM }
+    var programReading: Bool { readStep >= 0 }
+    var canReadProgram: Bool {
+        (tuneState == .demo || (tuneState == .live && !engineRunning)) && !programReading
+    }
+
+    /// Liest Block 0–3 und die Version, so wie die 123-App beim Verbinden.
+    /// Nur bei stehendem Motor; schreibt nichts.
+    func readTuneProgram() {
+        guard canReadProgram else { return }
+        if tuneState == .live { guard tuneRXChar != nil, ignition != nil else { return } }
+        readBlocks = [:]
+        readVersionText = nil
+        readStep = 0
+        readTries = 0
+        programRead = .reading(0)
+        sendReadStep()
+    }
+
+    private func sendReadStep() {
+        let cmd = readStep < Tune123.readBlocks.count ? Tune123.readBlocks[readStep] : Tune123.readVersion
+        readSent = Date()
+        if tuneState == .demo {
+            if let r = Tune123Demo.response(to: cmd) { tuneDemo.inject(r) }
+            return
+        }
+        guard let rx = tuneRXChar, let p = ignition else { stopRead(failed: true); return }
+        write(cmd, to: rx, on: p)
+    }
+
+    private func nextReadStep() {
+        readStep += 1
+        while readStep < Tune123.readBlocks.count, readBlocks[readStep] != nil { readStep += 1 }
+        readTries = 0
+        if readStep <= Tune123.readBlocks.count {
+            programRead = .reading(readStep)
+            sendReadStep()
+        } else {
+            finishRead()
+        }
+    }
+
+    private func readTimedOut() {
+        if readTries < 1 {
+            readTries += 1
+            sendReadStep()
+        } else if readStep == 0 {
+            stopRead(failed: true)       // ohne Block 0 keine Kurve
+        } else {
+            nextReadStep()               // fehlender Block: weiter mit dem naechsten
+        }
+    }
+
+    private func finishRead() {
+        readStep = -1
+        guard var p = Tune123Program.decode(readBlocks, version: readVersionText) else {
+            programRead = .failed
+            return
+        }
+        if tuneState == .demo {
+            p.isDemo = true
+        } else {
+            Self.saveProgram(p)
+        }
+        tuneProgram = p
+        programRead = .done
+        readBlocks = [:]
+    }
+
+    private func stopRead(failed: Bool) {
+        guard readStep >= 0 else { return }
+        readStep = -1
+        readBlocks = [:]
+        programRead = failed ? .failed : .idle
+    }
+
+    private func handleProgramFrame(_ f: Tune123Frame) {
+        guard readStep >= 0 else { return }
+        switch f {
+        case .block(let n, let bytes):
+            readBlocks[n] = bytes
+            if n == readStep { nextReadStep() }
+        case .version(let v):
+            readVersionText = v
+            if readStep == Tune123.readBlocks.count { nextReadStep() }
+        default:
+            break
+        }
+    }
+
+    static func loadProgram() -> Tune123Program? {
+        guard let d = UserDefaults.standard.data(forKey: programKey) else { return nil }
+        return try? JSONDecoder().decode(Tune123Program.self, from: d)
+    }
+
+    private static func saveProgram(_ p: Tune123Program) {
+        if let d = try? JSONEncoder().encode(p) { UserDefaults.standard.set(d, forKey: programKey) }
+    }
+
+    private var autoReadEnabled: Bool {
+        UserDefaults.standard.object(forKey: Self.autoReadKey) as? Bool ?? true
+    }
+
     /// Punktewolke leeren, z. B. nach einer Aenderung am Vergaser
     func clearScatter() {
         scatter = []
@@ -169,12 +298,16 @@ final class BLEManager: NSObject, ObservableObject {
         // Demo- und echte Werte nicht im Verlauf mischen
         history = []
         scatter = []
+        readStep = -1
+        readBlocks = [:]
+        programRead = .idle
         if isDemo {
             target = nil
             tuneTarget = nil
             shown = nil
             tune = nil
             tuneParser.reset()
+            tuneProgram = Self.loadProgram()
             bridgeState = .searching
             tuneState = .searching
             centralManagerDidUpdateState(central)   // scannt, oder zeigt "Bluetooth aus"
@@ -198,6 +331,9 @@ final class BLEManager: NSObject, ObservableObject {
             tuneParser.reset()
             demoTime = 0
             tuneDemo = Tune123Demo()
+            tuneProgram = nil                    // in der Demo frisch "lesen"
+            tuneLiveSince = Date()
+            autoReadPending = true
             bridgeState = .demo
             tuneState = .demo
             demoStep()
@@ -228,8 +364,18 @@ final class BLEManager: NSObject, ObservableObject {
             demoStep()
         }
 
-        // Keepalive an die 123, wie es die 123-App macht
-        if tuneState == .live, let rx = tuneRXChar, let p = ignition,
+        // Programmierung: automatisch einmal nach dem Verbinden, Zeitueberschreitung
+        if autoReadPending, tuneState == .live || tuneState == .demo,
+           now.timeIntervalSince(tuneLiveSince) >= Self.autoReadDelay {
+            autoReadPending = false
+            if autoReadEnabled || tuneState == .demo { readTuneProgram() }
+        }
+        if readStep >= 0, now.timeIntervalSince(readSent) > Self.readTimeout {
+            readTimedOut()
+        }
+
+        // Keepalive an die 123, wie es die 123-App macht (Pause, solange gelesen wird)
+        if tuneState == .live, readStep < 0, let rx = tuneRXChar, let p = ignition,
            now.timeIntervalSince(lastKeepalive) >= 1 {
             lastKeepalive = now
             write(Tune123.keepalive, to: rx, on: p)
@@ -342,7 +488,12 @@ final class BLEManager: NSObject, ObservableObject {
         let frames = tuneParser.feed(data)
         guard !frames.isEmpty else { return }
         var t = tuneTarget ?? TuneReading()
-        frames.forEach { t.apply($0) }
+        for f in frames {
+            switch f {
+            case .block, .version: handleProgramFrame(f)
+            default:               t.apply(f)
+            }
+        }
         tuneTarget = t
         if t != tune { tune = t }
         lastTuneFrame = Date()
@@ -398,6 +549,8 @@ extension BLEManager: CBCentralManagerDelegate {
             ignition = nil
             tuneRXChar = nil
             forgetBridgeControl()
+            stopRead(failed: false)
+            autoReadPending = false
             target = nil
             tuneTarget = nil
             shown = nil
@@ -456,6 +609,8 @@ extension BLEManager: CBCentralManagerDelegate {
             central.connect(peripheral, options: nil)
         } else if peripheral == ignition {
             tuneRXChar = nil
+            stopRead(failed: false)
+            autoReadPending = false
             tuneState = .connecting
             central.connect(peripheral, options: nil)
         }
@@ -517,6 +672,8 @@ extension BLEManager: CBPeripheralDelegate {
             tuneRXChar = rx
             lastTuneFrame = Date()       // Schonfrist, bevor "keine Daten" erscheint
             lastKeepalive = Date()
+            tuneLiveSince = Date()
+            autoReadPending = true       // Kurven lesen, falls der Motor steht
             tuneState = .live
         }
     }

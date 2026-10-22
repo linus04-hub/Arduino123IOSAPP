@@ -50,7 +50,13 @@ struct TuningView: View {
                     case .ignition:
                         sessionHeader
                         IgnitionPanel(session: tuning.current, rpm: ble.tune?.rpm,
-                                      advance: ble.tune?.advance, byLoad: byLoad)
+                                      advance: ble.tune?.advance, byLoad: byLoad,
+                                      program: ble.tuneProgram)
+                        ToolLink(title: "Zündkurven der 123",
+                                 subtitle: ToolsPanel.programSubtitle(ble.tuneProgram),
+                                 symbol: "memorychip") {
+                            Tune123ProgramView(ble: ble, session: tuning.current)
+                        }
                     case .compare:
                         ComparePanel(tuning: tuning, before: $before, after: $after)
                     case .tools:
@@ -153,18 +159,23 @@ struct ToolsPanel: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            toolLink(title: "Leerlauf-Assistent",
+            ToolLink(title: "Zündkurven der 123",
+                     subtitle: Self.programSubtitle(ble.tuneProgram),
+                     symbol: "memorychip") {
+                Tune123ProgramView(ble: ble, session: tuning.current)
+            }
+            ToolLink(title: "Leerlauf-Assistent",
                      subtitle: "Gemischschraube Schritt für Schritt einstellen",
                      symbol: "speedometer") {
                 IdleAssistantView(ble: ble, idle: idle)
             }
-            toolLink(title: "Gasstöße",
+            ToolLink(title: "Gasstöße",
                      subtitle: tipIns.events.isEmpty ? "Beschleunigerpumpe beurteilen"
                                                      : "\(tipIns.events.count) erkannt",
                      symbol: "waveform.path.ecg") {
                 TipInView(analyzer: tipIns)
             }
-            toolLink(title: "Düsen-Rechner",
+            ToolLink(title: "Düsen-Rechner",
                      subtitle: "Neue Düsengröße aus dem Kennfeld",
                      symbol: "function") {
                 JetCalcView(sessions: tuning.all)
@@ -177,8 +188,20 @@ struct ToolsPanel: View {
         }
     }
 
-    private func toolLink<Destination: View>(title: String, subtitle: String, symbol: String,
-                                             @ViewBuilder destination: () -> Destination) -> some View {
+    static func programSubtitle(_ p: Tune123Program?) -> String {
+        guard let p else { return "Programmierte Kurven, Begrenzer und Version" }
+        return "Gelesen " + Format.dayTime(p.readAt) + (p.isDemo ? " · Demo" : "")
+    }
+}
+
+/// Zeile mit Symbol, Titel und Untertitel, oeffnet eine Unterseite
+struct ToolLink<Destination: View>: View {
+    let title: String
+    let subtitle: String
+    let symbol: String
+    @ViewBuilder let destination: () -> Destination
+
+    var body: some View {
         NavigationLink {
             destination()
         } label: {
@@ -363,6 +386,7 @@ struct IgnitionPanel: View {
     let rpm: Double?
     let advance: Double?
     let byLoad: Bool
+    var program: Tune123Program? = nil      // gelesene Fliehkraftkurve, gestrichelt
 
     var body: some View {
         Panel {
@@ -377,7 +401,8 @@ struct IgnitionPanel: View {
                     }
                 }
                 CurvePlot(points: session.advancePoints, byLoad: byLoad,
-                          curves: [Curve(pts: session.advanceCurve, color: Theme.fg)],
+                          curves: [Curve(pts: session.advanceCurve, color: Theme.fg)]
+                            + (program.map { [Curve(pts: $0.advanceLine, color: Theme.accent, dashed: true)] } ?? []),
                           yRange: 0...45, yGrid: [10, 20, 30, 40], yFormat: "%.0f°",
                           currentX: rpm, currentY: advance)
                     .frame(height: 240)
@@ -386,6 +411,12 @@ struct IgnitionPanel: View {
                         RoundedRectangle(cornerRadius: 1).fill(Theme.fg).frame(width: 12, height: 3)
                         Text("Mittel je 250 U/min")
                     }
+                    if program != nil {
+                        HStack(spacing: 4) {
+                            RoundedRectangle(cornerRadius: 1).fill(Theme.accent).frame(width: 12, height: 3)
+                            Text("Fliehkraft programmiert")
+                        }
+                    }
                     if byLoad {
                         Text("Punkte: blau wenig Last, orange viel Last")
                     }
@@ -393,7 +424,9 @@ struct IgnitionPanel: View {
                 }
                 .font(.system(size: 10))
                 .foregroundColor(Theme.muted)
-                Text("So siehst du die Zündkurve, die die 123 tatsächlich fährt, inklusive Unterdruckverstellung. Die Farbe nach Last stellst du im Kennfeld unter „Lambda über Drehzahl“ um.")
+                Text(program == nil
+                     ? "So siehst du die Zündkurve, die die 123 tatsächlich fährt, inklusive Unterdruckverstellung. Die Farbe nach Last stellst du im Kennfeld unter „Lambda über Drehzahl“ um."
+                     : "So siehst du die Zündkurve, die die 123 tatsächlich fährt. Punkte über der gestrichelten Fliehkraftkurve sind Unterdruckverstellung. Die Farbe nach Last stellst du im Kennfeld unter „Lambda über Drehzahl“ um.")
                     .font(.system(size: 11))
                     .foregroundColor(Theme.muted)
             }

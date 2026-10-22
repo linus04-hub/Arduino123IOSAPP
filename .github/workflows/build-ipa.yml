@@ -19,6 +19,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: 123-Parser pruefen
+        run: |
+          mkdir -p "$RUNNER_TEMP/t123"
+          cat Sources/Tune123.swift Tests/Tune123Check.swift > "$RUNNER_TEMP/t123/main.swift"
+          swiftc -swift-version 5 "$RUNNER_TEMP/t123/main.swift" -o "$RUNNER_TEMP/t123/check"
+          "$RUNNER_TEMP/t123/check"
+
       - name: App bauen
         env:
           BUILD_NUMBER: ${{ github.run_number }}
