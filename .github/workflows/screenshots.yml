@@ -47,7 +47,10 @@ jobs:
             -destination "id=$UDID" \
             -resultBundlePath "$RUNNER_TEMP/shots.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
-            | tail -40
+            > "$RUNNER_TEMP/xcodebuild.log" 2>&1 || echo "xcodebuild fehlgeschlagen"
+          mkdir -p "$HOME/app-screens"
+          grep -E "error:|failed|Test Case|Executed|\*\* TEST" "$RUNNER_TEMP/xcodebuild.log" | tail -150 > "$HOME/app-screens/log.txt" || true
+          tail -60 "$RUNNER_TEMP/xcodebuild.log" >> "$HOME/app-screens/log.txt"
           ls -la "$HOME/app-screens"
 
       - name: Bilder auf Zweig "screenshots" legen
@@ -55,6 +58,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          mkdir -p "$HOME/app-screens"
           cd "$HOME/app-screens"
           git init -q -b screenshots
           git config user.name "github-actions"
