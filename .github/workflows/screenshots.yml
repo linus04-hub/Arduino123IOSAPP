@@ -1,0 +1,64 @@
+# Bildschirmfotos der App im Simulator (Demo-Modus).
+# Laeuft bei einem Push auf den Zweig "ui-shots" oder von Hand.
+# Die Bilder landen auf dem Zweig "screenshots".
+name: Screenshots
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ui-shots]
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Projekt erzeugen
+        run: |
+          command -v xcodegen >/dev/null || brew install xcodegen
+          xcodegen generate --quiet
+
+      - name: Simulator starten
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devs = [d for r, ds in json.load(sys.stdin)["devices"].items() if "iOS" in r for d in ds]
+          iphones = [d for d in devs if d["name"].startswith("iPhone")]
+          pick = next((d for d in iphones if "Pro" in d["name"] and "Max" not in d["name"]), iphones[0])
+          print(pick["udid"])')
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance dark
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3
+          xcrun simctl list devices | grep "$UDID"
+
+      - name: Durch die App klicken
+        run: |
+          rm -rf "$HOME/app-screens"
+          xcodebuild test \
+            -project CitroenAnzeige.xcodeproj \
+            -scheme CitroenAnzeige \
+            -destination "id=$UDID" \
+            -resultBundlePath "$RUNNER_TEMP/shots.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            | tail -40
+          ls -la "$HOME/app-screens"
+
+      - name: Bilder auf Zweig "screenshots" legen
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$HOME/app-screens"
+          git init -q -b screenshots
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -qm "Screenshots von ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" screenshots

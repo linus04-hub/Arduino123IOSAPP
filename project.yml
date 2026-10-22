@@ -20,6 +20,9 @@ targets:
       - path: Resources
     dependencies:
       - target: CitroenWidgets
+    scheme:
+      testTargets:
+        - CitroenAnzeigeUITests       # nur fuer Bildschirmfotos (Workflow "Screenshots")
     info:
       path: Info.plist
       properties:
@@ -68,3 +71,17 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
         SKIP_INSTALL: YES
+
+  CitroenAnzeigeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: CitroenAnzeige
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.linus.citroenanzeige.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
