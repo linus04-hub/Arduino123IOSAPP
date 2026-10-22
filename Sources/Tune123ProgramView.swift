@@ -151,12 +151,30 @@ struct Tune123ProgramView: View {
                     row("Ist (von der 123)", String(format: "%.1f°", ist), bold: true)
                     if t.tuningMode == true {
                         note("Tuning-Modus aktiv: Die 123 verschiebt den Zündwinkel gerade von Hand.")
-                    } else if let s = soll, abs(ist - s) > 1.5 {
-                        note("Weicht um " + String(format: "%.1f°", ist - s) + " ab. Entweder rechnet die 123 anders als hier angenommen, oder die Programmierung hat sich geändert (neu lesen).")
+                    } else if let d = steadyDeviation(p), abs(d) > 1.5 {
+                        note("Weicht seit ein paar Sekunden um " + String(format: "%+.1f°", d) + " ab. Entweder rechnet die 123 anders als hier angenommen, oder die Programmierung hat sich geändert (neu lesen).")
                     }
                 }
             }
         }
+    }
+
+    /// Mittlere Abweichung Ist − Soll der letzten 6 s, nur bei ruhigem Motor.
+    /// Die 123 schickt die Werte reihum, beim Gasgeben passen Drehzahl,
+    /// Druck und Zuendwinkel deshalb kurz nicht zusammen.
+    private func steadyDeviation(_ p: Tune123Program) -> Double? {
+        let now = Date()
+        let recent = ble.history.filter { now.timeIntervalSince($0.time) <= 6 }
+        let rpms = recent.compactMap(\.rpm), maps = recent.compactMap(\.mapKPa)
+        guard recent.count >= 16, rpms.count == recent.count, maps.count == recent.count,
+              let rLo = rpms.min(), let rHi = rpms.max(), rHi - rLo < 150,
+              let mLo = maps.min(), let mHi = maps.max(), mHi - mLo < 6 else { return nil }
+        let diffs = recent.compactMap { s -> Double? in
+            guard let r = s.rpm, let a = s.advance, let soll = p.expected(rpm: r, kPa: s.mapKPa) else { return nil }
+            return a - soll
+        }
+        guard diffs.count == recent.count else { return nil }
+        return diffs.reduce(0, +) / Double(diffs.count)
     }
 
     // ── Fliehkraftkurve ──

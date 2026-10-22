@@ -65,7 +65,8 @@ final class ScreenshotTests: XCTestCase {
     }
 
     private func scrollShot(_ name: String) {
-        let sv = app.scrollViews.firstMatch
+        // ScrollView, sonst Formular (Einstellungen, Duesen-Rechner)
+        let sv = app.scrollViews.firstMatch.exists ? app.scrollViews.firstMatch : app.collectionViews.firstMatch
         guard sv.exists else { return }
         sv.swipeUp(velocity: .slow)
         shot(name)
