@@ -37,6 +37,7 @@ struct Tune123ProgramView: View {
     @ObservedObject var ble: BLEManager
     let session: TuningSession
     @AppStorage(BLEManager.autoReadKey) private var autoRead = true
+    @State private var confirmForce = false
 
     var body: some View {
         ScrollView {
@@ -85,6 +86,19 @@ struct Tune123ProgramView: View {
                         .font(.system(size: 12))
                         .foregroundColor(Theme.muted)
                 }
+                // Falls die Drehzahl haengt: der Fahrer weiss, dass der Motor steht
+                if ble.tuneState == .live && ble.engineRunning && !ble.programReading {
+                    Button("Motor steht trotzdem? Lesen …") { confirmForce = true }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Theme.accent)
+                        .confirmationDialog("Motor wirklich aus?", isPresented: $confirmForce,
+                                            titleVisibility: .visible) {
+                            Button("Ja, Motor steht – lesen") { ble.readTuneProgram(force: true) }
+                            Button("Abbrechen", role: .cancel) {}
+                        } message: {
+                            Text("Die 123 meldet noch Drehzahl. Nur lesen, wenn der Motor aus ist und die Zündung an.")
+                        }
+                }
                 Toggle("Beim Verbinden automatisch lesen", isOn: $autoRead)
                     .font(.system(size: 14))
                     .foregroundColor(Theme.fg)
@@ -124,7 +138,10 @@ struct Tune123ProgramView: View {
     private var readHint: String? {
         if ble.programReading { return nil }
         if ble.tuneState != .live && ble.tuneState != .demo { return "123 nicht verbunden." }
-        if ble.tuneState == .live && ble.engineRunning { return "Nur bei stehendem Motor, wie in der 123-App." }
+        if ble.tuneState == .live && ble.engineRunning {
+            let r = ble.tune?.rpm.map { String(format: " (gerade %.0f U/min)", $0) } ?? ""
+            return "Nur bei stehendem Motor, wie in der 123-App" + r + "."
+        }
         return nil
     }
 

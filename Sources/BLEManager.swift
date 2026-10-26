@@ -139,6 +139,7 @@ final class BLEManager: NSObject, ObservableObject {
     private var tuneTarget: TuneReading?
     private var tuneParser = Tune123Parser()
     private var lastTuneFrame = Date.distantPast
+    private var lastRPMFrame = Date.distantPast     // letzter Drehzahl-Frame der 123
     private var lastKeepalive = Date.distantPast
 
     private var lastGraph = Date()
@@ -185,7 +186,12 @@ final class BLEManager: NSObject, ObservableObject {
     }
 
     // ── Programmierung der 123 lesen (nur Lesebefehle) ────────────
-    var engineRunning: Bool { (tuneTarget?.rpm ?? 0) >= Self.engineRunningRPM }
+    /// Motor laeuft nur, wenn die 123 gerade eine Drehzahl meldet. Eine alte
+    /// Drehzahl von vor dem Abstellen zaehlt nicht.
+    var engineRunning: Bool {
+        (tuneTarget?.rpm ?? 0) >= Self.engineRunningRPM
+            && Date().timeIntervalSince(lastRPMFrame) < Tune123.rpmStaleAfter
+    }
     var programReading: Bool { readStep >= 0 }
     var canReadProgram: Bool {
         (tuneState == .demo || (tuneState == .live && !engineRunning)) && !programReading
@@ -193,8 +199,10 @@ final class BLEManager: NSObject, ObservableObject {
 
     /// Liest Block 0–3 und die Version, so wie die 123-App beim Verbinden.
     /// Nur bei stehendem Motor; schreibt nichts.
-    func readTuneProgram() {
-        guard canReadProgram else { return }
+    /// `force`: auch lesen, wenn die 123 noch Drehzahl meldet (der Fahrer sagt, der Motor steht)
+    func readTuneProgram(force: Bool = false) {
+        let allowed = canReadProgram || (force && tuneState == .live && !programReading)
+        guard allowed else { return }
         if tuneState == .live { guard tuneRXChar != nil, ignition != nil else { return } }
         readBlocks = [:]
         readVersionText = nil
@@ -403,6 +411,14 @@ final class BLEManager: NSObject, ObservableObject {
             }
         }
 
+        // Kommt keine Drehzahl mehr, steht der Motor: nicht die letzte Drehzahl stehen lassen
+        if var t = tuneTarget, let r = t.rpm, r > 0,
+           now.timeIntervalSince(lastRPMFrame) > Tune123.rpmStaleAfter {
+            t.rpm = 0
+            tuneTarget = t
+            tune = t
+        }
+
         updateWarnings(now: now)
 
         // Bildschirm nicht sperren, solange ein Geraet verbunden ist
@@ -491,6 +507,7 @@ final class BLEManager: NSObject, ObservableObject {
         for f in frames {
             switch f {
             case .block, .version: handleProgramFrame(f)
+            case .rpm:             t.apply(f); lastRPMFrame = Date()
             default:               t.apply(f)
             }
         }

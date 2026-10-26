@@ -68,8 +68,11 @@ enum Tune123 {
     /// Block 1, Byte 6–9: Pincode. Wird nie weitergegeben.
     static let pinBytes          = 6...9
 
-    /// Erster Drehzahlwert nach dem Verbinden ist ein Platzhalter (0xBE → 9500).
+    /// Ohne Drehung schickt die 123 einen Platzhalter (0xBE → 9500), zum
+    /// Beispiel direkt nach dem Verbinden. Alles darueber gilt als Stillstand.
     static let maxPlausibleRPM: Double = 9000
+    /// Kommt so lange kein Drehzahl-Frame, steht der Motor.
+    static let rpmStaleAfter: TimeInterval = 4
 }
 
 enum Tune123Frame: Equatable {
@@ -230,7 +233,7 @@ struct TuneReading: Equatable {
 
     mutating func apply(_ f: Tune123Frame) {
         switch f {
-        case .rpm(let v):         if v <= Tune123.maxPlausibleRPM { rpm = v }
+        case .rpm(let v):         rpm = v <= Tune123.maxPlausibleRPM ? v : 0   // Platzhalter = Stillstand
         case .advance(let v):     advance = v
         case .mapKPa(let v):      mapKPa = v
         case .moduleTemp(let v):  moduleTemp = v
