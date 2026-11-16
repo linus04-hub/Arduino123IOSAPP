@@ -1,0 +1,66 @@
+Test Case '-[CitroenAnzeigeUITests.ScreenshotTests testScreens]' started.
+Test Case '-[CitroenAnzeigeUITests.ScreenshotTests testScreens]' passed (370.904 seconds).
+	 Executed 1 test, with 0 failures (0 unexpected) in 370.904 (370.909) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 370.904 (370.911) seconds
+	 Executed 1 test, with 0 failures (0 unexpected) in 370.904 (370.913) seconds
+** TEST SUCCEEDED **
+    t =   347.38s Open de.linus.citroenanzeige
+    t =   347.38s     Launch de.linus.citroenanzeige
+2026-11-16 23:20:05.400 xcodebuild[3421:16032] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-11-16 23:20:05.401 xcodebuild[3421:16032] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =   348.33s         Setting up automation session
+    t =   350.53s         Wait for de.linus.citroenanzeige to idle
+    t =   352.96s Waiting 2.0s for Alert (First Match) to exist
+    t =   353.99s     Checking `Expect predicate `existsNoRetry == 1` for object Alert (First Match)`
+    t =   353.99s         Checking existence of `Alert (First Match)`
+    t =   354.05s         Capturing element debug description
+    t =   354.97s     Checking `Expect predicate `existsNoRetry == 1` for object Alert (First Match)`
+    t =   354.97s         Checking existence of `Alert (First Match)`
+    t =   355.03s         Capturing element debug description
+    t =   355.04s     Checking existence of `Alert (First Match)`
+    t =   355.09s Collecting debug information to assist test failure triage
+    t =   355.09s     Requesting snapshot of accessibility hierarchy for app with pid 1440
+    t =   355.16s Waiting 8.0s for "Demo-Werte zeigen" Button to exist
+    t =   356.21s     Checking `Expect predicate `existsNoRetry == 1` for object "Demo-Werte zeigen" Button`
+    t =   356.21s         Checking existence of `"Demo-Werte zeigen" Button`
+    t =   356.37s Tap "Demo-Werte zeigen" Button
+    t =   356.37s     Wait for de.linus.citroenanzeige to idle
+    t =   356.38s     Find the "Demo-Werte zeigen" Button
+    t =   356.49s     Check for interrupting elements affecting "Demo-Werte zeigen" Button
+    t =   356.54s     Synthesize event
+    t =   356.56s         Scroll element to visible
+    t =   356.56s         Find the "Demo-Werte zeigen" Button
+    t =   356.71s         Computed hit point {201, 640} after scrolling to visible
+    t =   357.01s     Wait for de.linus.citroenanzeige to idle
+    t =   363.31s Checking existence of `ScrollView (First Match)`
+    t =   363.36s Swipe down ScrollView (First Match)
+    t =   363.37s     Wait for de.linus.citroenanzeige to idle
+    t =   363.37s     Find the ScrollView (First Match)
+    t =   363.43s     Check for interrupting elements affecting ScrollView
+    t =   363.51s     Synthesize event
+    t =   364.00s     Wait for de.linus.citroenanzeige to idle
+    t =   364.83s Swipe down ScrollView at {{0.0, 0.0}, {402.0, 874.0}}
+    t =   364.83s     Wait for de.linus.citroenanzeige to idle
+    t =   364.87s     Find the ScrollView at {{0.0, 0.0}, {402.0, 874.0}}
+    t =   365.22s     Check for interrupting elements affecting ScrollView
+    t =   365.48s     Synthesize event
+    t =   366.05s     Wait for de.linus.citroenanzeige to idle
+    t =   369.04s Added attachment named '05-live-tuning'
+    t =   369.05s Tear Down
+Test Case '-[CitroenAnzeigeUITests.ScreenshotTests testScreens]' passed (370.904 seconds).
+Test Suite 'ScreenshotTests' passed at 2026-11-16 23:20:28.920.
+	 Executed 1 test, with 0 failures (0 unexpected) in 370.904 (370.909) seconds
+Test Suite 'CitroenAnzeigeUITests.xctest' passed at 2026-11-16 23:20:28.922.
+	 Executed 1 test, with 0 failures (0 unexpected) in 370.904 (370.911) seconds
+Test Suite 'All tests' passed at 2026-11-16 23:20:28.923.
+	 Executed 1 test, with 0 failures (0 unexpected) in 370.904 (370.913) seconds
+2026-11-16 23:20:30.623 xcodebuild[3421:16032] [MT] IDETestOperationsObserverDebug: 459.417 elapsed -- Testing started completed.
+2026-11-16 23:20:30.623 xcodebuild[3421:16032] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-16 23:20:30.623 xcodebuild[3421:16032] [MT] IDETestOperationsObserverDebug: 459.417 sec, +459.417 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/runner/work/_temp/shots.xcresult
+
+** TEST SUCCEEDED **
+
+Testing started
