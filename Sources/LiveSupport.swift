@@ -57,6 +57,14 @@ struct LambdaLook {
     var level: Level
     var text: String
     var target: Double?          // Ziel des aktuellen Bereichs, nil = feste Zonen um 1,00
+    var short = ""               // nur das Urteil, fuer schmale Kacheln
+
+    init(level: Level, text: String, target: Double?, short: String? = nil) {
+        self.level = level
+        self.text = text
+        self.target = target
+        self.short = short ?? text
+    }
 }
 
 enum LiveJudge {
@@ -76,7 +84,8 @@ enum LiveJudge {
             let j = MixtureJudge.judge(lambda: v, regime: g, targets: LiveContext.targets)
             let area = j.regime?.title ?? ""
             let text = j.target == nil ? area : area + " · " + j.text
-            return LambdaLook(level: j.severity.level, text: text, target: j.target)
+            return LambdaLook(level: j.severity.level, text: text, target: j.target,
+                              short: j.target == nil ? area : j.text)
         }
         let fixed = Limits.lambda(v)
         return LambdaLook(level: fixed.0, text: fixed.1, target: nil)

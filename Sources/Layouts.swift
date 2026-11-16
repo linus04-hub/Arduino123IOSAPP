@@ -342,7 +342,7 @@ struct TuningLayout: View {
                         HStack {
                             CardLabel(title: "Lambda", glyph: "λ")
                             Spacer()
-                            Text(lamJudged.1)
+                            Text(ble.lambdaLook.short)
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(lamJudged.0.color)
                                 .lineLimit(1)
