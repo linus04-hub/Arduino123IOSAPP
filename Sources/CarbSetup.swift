@@ -130,7 +130,7 @@ struct CarbSetup: Codable, Equatable {
     static func text(_ v: Double?, _ f: Field) -> String {
         guard let v else { return "–" }
         let n = v == v.rounded() ? String(format: "%.0f", v)
-            : String(format: "%.2f", v).replacingOccurrences(of: ".", with: ",")
+            : String(format: "%.2f", v)
         return f.unit.isEmpty || f == .mixtureTurns ? n : n + " " + f.unit
     }
 

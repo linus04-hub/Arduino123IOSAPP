@@ -7,6 +7,8 @@ import SwiftUI
 struct JetCalcView: View {
     let sessions: [TuningSession]        // erste = "Aktuell"
     var cell: MapCell? = nil             // aus dem Kennfeld angetippt
+    var steady = false                   // die Zelle aus dem Kennfeld "nur ruhige Fahrt"
+    var preset: CarbCircuit? = nil       // aus dem Gemisch-Check
 
     @State private var sessionID: UUID?
     @State private var circuit: CarbCircuit = .stage1
@@ -22,10 +24,11 @@ struct JetCalcView: View {
     /// Gemessenes Lambda und Anzahl Werte fuer die gewaehlte Quelle
     private var measured: (lambda: Double, count: Int)? {
         guard let s = session else { return nil }
-        if onlyCell, let c = cell, let l = s.lambda(row: c.row, col: c.col) {
-            return (l, s.count(row: c.row, col: c.col))
+        if onlyCell, let c = cell, let l = s.lambda(row: c.row, col: c.col, steady: steady) {
+            return (l, s.count(row: c.row, col: c.col, steady: steady))
         }
-        guard let st = s.stats(circuit) else { return nil }
+        // wenn vorhanden, nur ruhige Fahrt: Gasstoesse verfaelschen den Mittelwert
+        guard let st = s.stats(circuit, steady: s.hasSteady) else { return nil }
         return (st.lambda, st.count)
     }
 
@@ -95,6 +98,7 @@ struct JetCalcView: View {
             loaded = true
             if sessionID == nil { sessionID = sessions.first?.id }
             if let c = cell, let k = CarbCircuit.of(row: c.row, col: c.col) { circuit = k }
+            if let p = preset { circuit = p }
             loadInputs()
         }
         .onChange(of: circuit) { _ in loadInputs() }
@@ -135,6 +139,7 @@ struct JetCalcView: View {
             return String(format: "Nur die Zelle %.0f U/min, %.0f–%.0f kPa. Gehört zu: ", TuningSession.colCenter(c.col), lo, lo + 10) + circuit.title + "."
         }
         return circuit.area + ". Die Zuordnung zum Vergaserkreis ist grob."
+            + ((session?.hasSteady ?? false) ? " Gerechnet wird mit ruhiger Fahrt bei warmem Motor." : "")
     }
 
     private func deviationText(_ percent: Double) -> String {

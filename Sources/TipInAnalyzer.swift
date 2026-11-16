@@ -133,7 +133,7 @@ struct TipInView: View {
 
     private var infoCard: some View {
         Panel {
-            Text("Erkannt wird ein Gasstoß, wenn Lambda nach ruhiger Fahrt schnell um mindestens 0,05 ausschlägt und die Drehzahl danach steigt. Ohne Drosselklappen-Sensor ist das eine Schätzung, einzelne Fehlerkennungen sind möglich. Lambda wird 4-mal pro Sekunde ausgewertet, sehr kurze Spitzen können fehlen. Demo-Werte werden nicht erfasst.")
+            Text("Mit der 123 zählt als Gasstoß, wenn der Saugrohrdruck aus ruhiger Fahrt um mindestens 15 kPa springt und oben bleibt. So werden auch die sauberen erfasst. Ohne Saugrohrdruck erkennt die App nur Gasstöße, bei denen Lambda sichtbar ausschlägt. Mager heißt: Lambda steigt kurz um mindestens 0.08. Dass es danach fetter wird, ist bei Vollgas gewollt und zählt erst unter Lambda 0.80 als zu fett. Lambda wird 4-mal pro Sekunde ausgewertet, sehr kurze Spitzen können fehlen. Demo-Werte werden nicht erfasst.")
                 .font(.system(size: 11))
                 .foregroundColor(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -171,7 +171,8 @@ struct TipInRow: View {
                     .frame(height: 70)
                 Text(String(format: "λ %.3f → mager %.3f (+%.3f), fett %.3f · %.2f s mager · %.0f → %.0f U/min",
                             event.baseLambda, event.peakLambda, event.leanSpike, event.minLambda,
-                            event.leanSeconds, event.rpmBefore, event.rpmAfter))
+                            event.leanSeconds, event.rpmBefore, event.rpmAfter)
+                     + (event.mapAfter.map { String(format: " · %.0f → %.0f kPa", event.mapBefore ?? 0, $0) } ?? ""))
                     .font(.system(size: 11).monospacedDigit())
                     .foregroundColor(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)

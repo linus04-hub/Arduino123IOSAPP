@@ -61,11 +61,42 @@ struct SettingsView: View {
                 Section {
                     Toggle("Fahrten automatisch aufzeichnen", isOn: $autoRecord)
                 } footer: {
-                    Text("Startet, sobald der Motor 5 Sekunden läuft (Drehzahl von der 123 oder Öldruck), und endet eine Minute nach dem Abstellen.")
+                    Text("Startet, sobald der Motor 5 Sekunden läuft, und endet eine Minute nach dem Abstellen. Mit der 123 zählt die Drehzahl, ohne sie der Öldruck.")
+                }
+                .listRowBackground(Theme.surface)
+
+                Section {
+                    NavigationLink {
+                        MixtureSettingsView()
+                    } label: {
+                        Label("Gemisch", systemImage: "stethoscope")
+                    }
+                    NavigationLink {
+                        AlertSettingsView()
+                    } label: {
+                        Label("Warnungen und Fahrzeug", systemImage: "exclamationmark.triangle.fill")
+                    }
+                } header: {
+                    Text("Abstimmung")
+                } footer: {
+                    Text("Ziel-Lambda je Betriebsbereich, Warnungen während der Fahrt und die Fahrzeugmasse für die Leistungsschätzung.")
                 }
                 .listRowBackground(Theme.surface)
 
                 BridgeSection(ble: model.ble)
+
+                Section {
+                    NavigationLink {
+                        DiagnosticsView(ble: model.ble, store: model.ble.diagnostics, location: model.location)
+                    } label: {
+                        Label("Diagnose", systemImage: "waveform.path.ecg.rectangle")
+                    }
+                } header: {
+                    Text("Technik")
+                } footer: {
+                    Text("Selbsttest der Sensoren, Datenraten und Rohwerte von Bridge und 123, Empfangsstärke und ein Verbindungsprotokoll zum Teilen.")
+                }
+                .listRowBackground(Theme.surface)
 
                 Section {
                     LabeledContent("Version", value: version)
@@ -73,7 +104,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Info")
                 } footer: {
-                    Text("Fahrten und Messreihen liegen in der Dateien-App unter „Auf meinem iPhone › Citroën“.")
+                    Text("Fahrten, Messreihen, Logbuch und Tankbuch liegen in der Dateien-App unter „Auf meinem iPhone › Citroën“.")
                 }
                 .listRowBackground(Theme.surface)
             }

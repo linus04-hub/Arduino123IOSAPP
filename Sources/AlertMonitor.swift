@@ -26,12 +26,12 @@ enum AlertKind: String, CaseIterable, Identifiable, Codable {
     /// Fuer die Einstellungen
     var explanation: String {
         switch self {
-        case .oilPressure: return "unter 1,0 bar ab 1500 U/min, länger als 2 s"
+        case .oilPressure: return "unter 1.0 bar ab 1500 U/min, länger als 2 s"
         case .oilTemp:     return "ab 145 °C"
-        case .leanLoad:    return "Lambda ab 1,05 bei viel Gas ab 2500 U/min, länger als 2 s"
+        case .leanLoad:    return "Lambda ab 1.05 bei viel Gas ab 2500 U/min, länger als 2 s"
         case .overRev:     return "ab 5750 U/min"
-        case .voltageLow:  return "unter 12,4 V bei laufendem Motor, länger als 10 s"
-        case .voltageHigh: return "über 15,2 V"
+        case .voltageLow:  return "unter 12.4 V bei laufendem Motor, länger als 10 s"
+        case .voltageHigh: return "über 15.2 V"
         }
     }
 
@@ -119,7 +119,7 @@ struct AlertMonitor {
     /// Bedingung je Warnung: (trifft zu, Detailtext). nil = Wert fehlt.
     static func condition(_ k: AlertKind, _ s: Sample) -> (Bool, String)? {
         func f(_ v: Double, _ d: Int) -> String {
-            String(format: "%.\(d)f", v).replacingOccurrences(of: ".", with: ",")
+            String(format: "%.\(d)f", v)
         }
         switch k {
         case .oilPressure:

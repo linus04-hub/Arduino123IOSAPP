@@ -182,7 +182,7 @@ enum Metric: String, CaseIterable, Identifiable {
         default:
             break
         }
-        return judge(current(ble)).1
+        return judge(current(ble), ble).1
     }
 
     /// Linienfarbe im Verlauf

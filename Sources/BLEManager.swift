@@ -14,6 +14,30 @@ enum ProgramRead: Equatable {
     case failed
 }
 
+/// Diagnose-Daten getrennt vom BLEManager, damit die Anzeigen davon nicht neu zeichnen.
+/// Der Stand wird nur veroeffentlicht, solange die Diagnose-Seite offen ist.
+final class DiagnosticsStore: ObservableObject {
+    @Published private(set) var snapshot = LinkDiagnostics()
+    var work = LinkDiagnostics()
+    var visible = false {
+        didSet { if visible { snapshot = work } }
+    }
+
+    func publish() {
+        if visible { snapshot = work }
+    }
+
+    func note(_ text: String) {
+        work.note(text)
+    }
+
+    func resetCounters() {
+        work.resetCounters()
+        work.note("Zähler zurückgesetzt")
+        publish()
+    }
+}
+
 // ── Bluetooth: Bridge (Lambda/Oel/Tank) und 123ignition gleichzeitig ──
 final class BLEManager: NSObject, ObservableObject {
     // Bridge — muss zur Firmware passen (SERVICE_UUID / DATA_UUID)
@@ -63,6 +87,8 @@ final class BLEManager: NSObject, ObservableObject {
     var onSample: ((Sample) -> Void)?
     /// Liefert das GPS-Tempo in km/h
     var speedSource: () -> Double? = { nil }
+    /// Zaehler, Raten und Protokoll fuer die Diagnose-Seite
+    let diagnostics = DiagnosticsStore()
 
     private var central: CBCentralManager!
     private var bridge: CBPeripheral?
@@ -95,6 +121,9 @@ final class BLEManager: NSObject, ObservableObject {
     private var tuneLiveSince = Date.distantPast
     private var autoReadPending = false
     private var idleTimerOff = false
+    private var lastDiagTick = Date.distantPast
+    private var lastRSSI = Date.distantPast
+    private var rawLogUntil = Date.distantPast      // so lange maskierte Rohdaten ins Protokoll
 
     override init() {
         super.init()
@@ -145,12 +174,16 @@ final class BLEManager: NSObject, ObservableObject {
         readStep = 0
         readTries = 0
         programRead = .reading(0)
+        diagnostics.note(force ? "Zündkurven lesen (trotz Drehzahl)" : "Zündkurven lesen")
         sendReadStep()
     }
 
     private func sendReadStep() {
         let cmd = readStep < Tune123.readBlocks.count ? Tune123.readBlocks[readStep] : Tune123.readVersion
         readSent = Date()
+        rawLogUntil = readSent.addingTimeInterval(Self.readTimeout + 1)
+        diagnostics.note("→ " + (readStep < Tune123.readBlocks.count ? "Block \(readStep) anfordern" : "Version anfordern")
+                         + (readTries > 0 ? " (2. Versuch)" : ""))
         if tuneState == .demo {
             if let r = Tune123Demo.response(to: cmd) { tuneDemo.inject(r) }
             return
@@ -172,6 +205,7 @@ final class BLEManager: NSObject, ObservableObject {
     }
 
     private func readTimedOut() {
+        diagnostics.note("Keine Antwort auf " + (readStep < Tune123.readBlocks.count ? "Block \(readStep)" : "Version"))
         if readTries < 1 {
             readTries += 1
             sendReadStep()
@@ -186,8 +220,11 @@ final class BLEManager: NSObject, ObservableObject {
         readStep = -1
         guard var p = Tune123Program.decode(readBlocks, version: readVersionText) else {
             programRead = .failed
+            diagnostics.note("Lesen fehlgeschlagen: Block 0 fehlt")
             return
         }
+        diagnostics.note("Gelesen: Blöcke " + readBlocks.keys.sorted().map { String($0) }.joined(separator: ", ")
+                         + (readVersionText == nil ? ", keine Version" : ", Version " + (readVersionText ?? "")))
         if tuneState == .demo {
             p.isDemo = true
         } else {
@@ -203,12 +240,14 @@ final class BLEManager: NSObject, ObservableObject {
         readStep = -1
         readBlocks = [:]
         programRead = failed ? .failed : .idle
+        if failed { diagnostics.note("Lesen abgebrochen") }
     }
 
     private func handleProgramFrame(_ f: Tune123Frame) {
         guard readStep >= 0 else { return }
         switch f {
         case .block(let n, let bytes):
+            diagnostics.note("← Block \(n) empfangen")
             readBlocks[n] = bytes
             if n == readStep { nextReadStep() }
         case .version(let v):
@@ -245,6 +284,9 @@ final class BLEManager: NSObject, ObservableObject {
         readStep = -1
         readBlocks = [:]
         programRead = .idle
+        tuneParser.resetStats()
+        diagnostics.work.resetCounters()
+        diagnostics.note(isDemo ? "Demo beendet" : "Demo gestartet")
         if isDemo {
             target = nil
             tuneTarget = nil
@@ -355,7 +397,29 @@ final class BLEManager: NSObject, ObservableObject {
             tune = t
         }
 
+        // Anzeigen leeren, sobald nichts Frisches mehr kommt. Sonst stehen die
+        // letzten Werte da, als waeren sie aktuell.
+        let bridgeFresh = (bridgeState == .live || bridgeState == .demo)
+            && now.timeIntervalSince(lastPacket) <= Self.bridgeStaleAfter
+        if !bridgeFresh, shown != nil { shown = nil }
+        let tuneFresh = (tuneState == .live || tuneState == .demo)
+            && now.timeIntervalSince(lastTuneFrame) <= Self.tuneStaleAfter
+        if !tuneFresh, tune != nil { tune = nil }
+
         updateWarnings(now: now)
+
+        // Diagnose: Raten einmal je Sekunde, Empfangsstaerke alle 3 s
+        if now.timeIntervalSince(lastDiagTick) >= 1 {
+            lastDiagTick = now
+            diagnostics.work.tune = tuneParser.stats
+            diagnostics.work.tick(now: now)
+            diagnostics.publish()
+        }
+        if now.timeIntervalSince(lastRSSI) >= 3 {
+            lastRSSI = now
+            if bridgeState == .live { bridge?.readRSSI() } else { diagnostics.work.bridgeRSSI = nil }
+            if tuneState == .live { ignition?.readRSSI() } else { diagnostics.work.tuneRSSI = nil }
+        }
 
         // Bildschirm nicht sperren, solange ein Geraet verbunden ist
         if anyLive != idleTimerOff {
@@ -430,13 +494,22 @@ final class BLEManager: NSObject, ObservableObject {
     }
 
     private func receiveBridge(_ data: Data) {
-        guard let r = Reading(packet: data) else { return }
+        guard let r = Reading(packet: data) else {
+            diagnostics.work.bridgeBad += 1
+            return
+        }
+        diagnostics.work.bridgePackets += 1
         target = r
         if r != shown { shown = r }
         lastPacket = Date()
     }
 
     private func receiveTune(_ data: Data) {
+        // Waehrend eines Lesebefehls den Aufbau der Antwort mitschreiben. Nur maskiert:
+        // In Block 1 steht der Pincode, der darf nirgends auftauchen.
+        if Date() < rawLogUntil {
+            diagnostics.note("← \(data.count) B  " + Tune123.mask([UInt8](data)))
+        }
         let frames = tuneParser.feed(data)
         guard !frames.isEmpty else { return }
         var t = tuneTarget ?? TuneReading()
@@ -509,6 +582,7 @@ extension BLEManager: CBCentralManagerDelegate {
             shown = nil
             tune = nil
             tuneParser.reset()
+            diagnostics.note(central.state == .unauthorized ? "Kein Bluetooth-Zugriff" : "Bluetooth aus")
             let s: LinkState = central.state == .unauthorized ? .unauthorized : .bluetoothOff
             bridgeState = s
             tuneState = s
@@ -524,12 +598,16 @@ extension BLEManager: CBCentralManagerDelegate {
 
         if bridge == nil, uuids.contains(Self.bridgeService) || name.hasPrefix("Citroen") {
             bridge = peripheral             // starke Referenz halten, sonst bricht iOS die Verbindung ab
+            diagnostics.note("Anzeige gefunden: " + (name.isEmpty ? "ohne Name" : name) + ", \(RSSI) dBm")
             bridgeState = .connecting
             central.connect(peripheral, options: nil)
         } else if ignition == nil,
                   uuids.contains(Self.tuneService)
                   || (uuids.contains(Self.nusService) && is123(name: name, advertisementData: advertisementData)) {
             ignition = peripheral
+            diagnostics.work.tuneName = name.isEmpty ? nil : name
+            diagnostics.note("123 gefunden: " + (name.isEmpty ? "ohne Name" : name) + ", \(RSSI) dBm, "
+                             + (uuids.contains(Self.tuneService) ? "BRSP" : "Nordic UART"))
             tuneState = .connecting
             central.connect(peripheral, options: nil)
         }
@@ -547,6 +625,8 @@ extension BLEManager: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        diagnostics.note((peripheral == bridge ? "Anzeige" : "123") + ": Verbinden fehlgeschlagen"
+                         + (error.map { " (" + $0.localizedDescription + ")" } ?? ""))
         if peripheral == bridge { bridge = nil; forgetBridgeControl() }
         if peripheral == ignition { ignition = nil; tuneRXChar = nil }
         retryLater()
@@ -556,11 +636,16 @@ extension BLEManager: CBCentralManagerDelegate {
         guard !isDemo else { return }
         // Verbindungswunsch bleibt offen: iOS verbindet von selbst neu,
         // sobald das Geraet wieder Strom hat und in Reichweite ist.
+        let why = error.map { " (" + $0.localizedDescription + ")" } ?? ""
         if peripheral == bridge {
+            diagnostics.note("Anzeige getrennt" + why)
             forgetBridgeControl()
+            shown = nil
             bridgeState = .connecting
             central.connect(peripheral, options: nil)
         } else if peripheral == ignition {
+            diagnostics.note("123 getrennt" + why)
+            tune = nil
             tuneRXChar = nil
             stopRead(failed: false)
             autoReadPending = false
@@ -608,6 +693,8 @@ extension BLEManager: CBPeripheralDelegate {
                 bridgeVersion = nil
             }
             lastPacket = Date()
+            diagnostics.work.bridgeConnects += 1
+            diagnostics.note("Anzeige verbunden" + (bridgeCtrlChar == nil ? " (v2 oder älter)" : ""))
             bridgeState = .live
 
         } else if peripheral == ignition {
@@ -623,12 +710,23 @@ extension BLEManager: CBPeripheralDelegate {
             }
             write(Tune123.hello, to: rx, on: peripheral)
             tuneRXChar = rx
+            tuneTarget = nil             // keine Werte von vor der Unterbrechung uebernehmen
+            lastRPMFrame = .distantPast
+            diagnostics.work.tuneVariant = nus ? "Nordic UART" : "BRSP"
+            diagnostics.work.tuneConnects += 1
+            diagnostics.note("123 verbunden (" + (nus ? "Nordic UART" : "BRSP") + ")")
             lastTuneFrame = Date()       // Schonfrist, bevor "keine Daten" erscheint
             lastKeepalive = Date()
             tuneLiveSince = Date()
             autoReadPending = true       // Kurven lesen, falls der Motor steht
             tuneState = .live
         }
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
+        guard error == nil else { return }
+        if peripheral == bridge { diagnostics.work.bridgeRSSI = RSSI.intValue }
+        if peripheral == ignition { diagnostics.work.tuneRSSI = RSSI.intValue }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {

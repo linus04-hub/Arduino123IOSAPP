@@ -6,7 +6,7 @@ struct StandardLayout: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            LambdaCard(value: ble.shown?.lambda)
+            LambdaCard(value: ble.shown?.lambda, look: ble.lambdaLook)
 
             HStack(spacing: 10) {
                 card(.oilP, symbol: "drop.fill", title: "Öldruck")
@@ -34,8 +34,8 @@ struct StandardLayout: View {
 
             HStack(spacing: 10) {
                 CompactCard(title: "Bordnetz", value: ble.tune?.voltage, placeholder: "--.-",
-                            unit: "V", level: Metric.voltage.judge(ble.tune?.voltage).0,
-                            status: Metric.voltage.judge(ble.tune?.voltage).1)
+                            unit: "V", level: Metric.voltage.judge(ble.tune?.voltage, ble).0,
+                            status: Metric.voltage.judge(ble.tune?.voltage, ble).1)
                 CompactCard(title: "Spule", value: ble.tune?.coilCurrent, placeholder: "-.-",
                             unit: "A", level: ble.tune?.coilCurrent == nil ? .off : .info)
                 CompactCard(title: "Modul", value: ble.tune?.moduleTemp, format: "%.0f",
@@ -48,7 +48,7 @@ struct StandardLayout: View {
 
     private func card(_ m: Metric, symbol: String, title: String) -> some View {
         let v = m.current(ble)
-        let judged = m.judge(v)
+        let judged = m.judge(v, ble)
         return ValueCard(title: title, symbol: symbol, unit: m.unit,
                          value: v, format: m.format, placeholder: m.placeholderText(ble),
                          level: judged.0, status: m.status(ble))
@@ -106,14 +106,14 @@ struct DialsLayout: View {
 
             Panel(radius: 16) {
                 let v = Metric.lambda.current(ble)
-                let judged = Metric.lambda.judge(v)
+                let judged = Metric.lambda.judge(v, ble)
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline) {
                         CardLabel(title: "Lambda", glyph: "λ")
                         Spacer()
                         BigValue(value: v, format: "%.3f", placeholder: "-.---", level: judged.0, size: 30)
                     }
-                    LambdaScale(lambda: ble.shown?.lambda, showLabels: false)
+                    LambdaScale(lambda: ble.shown?.lambda, target: ble.lambdaLook.target, showLabels: false)
                     HStack {
                         Text("fett")
                         Spacer()
@@ -130,7 +130,7 @@ struct DialsLayout: View {
                 SmallStat(metricTitle: "Tank", value: ble.shown?.tankValue, format: "%.0f", unit: "%",
                           level: Metric.tank.judge(ble.shown?.tankValue).0, motion: Motion.value)
                 SmallStat(metricTitle: "Bordnetz", value: ble.tune?.voltage, unit: "V",
-                          level: Metric.voltage.judge(ble.tune?.voltage).0)
+                          level: Metric.voltage.judge(ble.tune?.voltage, ble).0)
                 SmallStat(metricTitle: "Modul", value: ble.tune?.moduleTemp, format: "%.0f", unit: "°C",
                           level: ble.tune?.moduleTemp.map { Limits.moduleTemp($0) } ?? .off)
             }
@@ -140,7 +140,7 @@ struct DialsLayout: View {
     private func dialPanel(_ m: Metric, title: String, range: ClosedRange<Double>, major: Double,
                            labelEvery: Int, redFrom: Double, redTo: Double?, format: String) -> some View {
         let v = m.current(ble)
-        let judged = m.judge(v)
+        let judged = m.judge(v, ble)
         return Panel(radius: 16, padding: 8) {
             VStack(spacing: 2) {
                 Text(title.uppercased())
@@ -231,7 +231,7 @@ struct FocusPanel: View {
 
     var body: some View {
         let v = metric.current(ble)
-        let judged = metric.judge(v)
+        let judged = metric.judge(v, ble)
         let vals = ble.history.compactMap { metric.value(in: $0) }
         Panel(radius: 18, padding: 16) {
             VStack(alignment: .leading, spacing: 8) {
@@ -255,7 +255,7 @@ struct FocusPanel: View {
                          render: metric.render)
                     .frame(maxWidth: .infinity)
                 if metric == .lambda {
-                    LambdaScale(lambda: ble.shown?.lambda)
+                    LambdaScale(lambda: ble.shown?.lambda, target: ble.lambdaLook.target)
                 } else if metric == .rpm {
                     RPMBar(rpm: v)
                 }
@@ -281,7 +281,7 @@ struct MetricTile: View {
 
     var body: some View {
         let v = metric.current(ble)
-        let judged = metric.judge(v)
+        let judged = metric.judge(v, ble)
         VStack(alignment: .leading, spacing: 6) {
             Text(metric.title.uppercased())
                 .font(.system(size: 10, weight: .bold))
@@ -332,7 +332,7 @@ struct TuningLayout: View {
 
     var body: some View {
         let lam = Metric.lambda.current(ble)
-        let lamJudged = Metric.lambda.judge(lam)
+        let lamJudged = Metric.lambda.judge(lam, ble)
         let rpm = ble.tune?.rpm
 
         VStack(spacing: 10) {
@@ -349,7 +349,7 @@ struct TuningLayout: View {
                                 .minimumScaleFactor(0.7)
                         }
                         BigValue(value: lam, format: "%.3f", placeholder: "-.---", level: lamJudged.0, size: 40)
-                        LambdaScale(lambda: ble.shown?.lambda, showLabels: false)
+                        LambdaScale(lambda: ble.shown?.lambda, target: ble.lambdaLook.target, showLabels: false)
                     }
                 }
                 Panel {
@@ -421,14 +421,14 @@ struct TuningLayout: View {
             LazyVGrid(columns: columns, spacing: 8) {
                 SmallStat(metricTitle: "Öldruck", value: Metric.oilP.current(ble), format: "%.1f",
                           placeholder: Metric.oilP.placeholderText(ble), unit: "bar",
-                          level: Metric.oilP.judge(Metric.oilP.current(ble)).0, motion: Motion.value)
+                          level: Metric.oilP.judge(Metric.oilP.current(ble), ble).0, motion: Motion.value)
                 SmallStat(metricTitle: "Öltemp.", value: Metric.oilT.current(ble), format: "%.0f",
                           placeholder: Metric.oilT.placeholderText(ble), unit: "°C",
                           level: Metric.oilT.judge(Metric.oilT.current(ble)).0, motion: Motion.value)
                 SmallStat(metricTitle: "Tank", value: ble.shown?.tankValue, format: "%.0f", unit: "%",
                           level: Metric.tank.judge(ble.shown?.tankValue).0, motion: Motion.value)
                 SmallStat(metricTitle: "Bordnetz", value: ble.tune?.voltage, unit: "V",
-                          level: Metric.voltage.judge(ble.tune?.voltage).0)
+                          level: Metric.voltage.judge(ble.tune?.voltage, ble).0)
                 SmallStat(metricTitle: "Zündw.", value: ble.tune?.advance, unit: "°")
                 SmallStat(metricTitle: "Saugrohr", value: ble.tune?.mapKPa, format: "%.0f", unit: "kPa")
                 SmallStat(metricTitle: "Spule", value: ble.tune?.coilCurrent, unit: "A")

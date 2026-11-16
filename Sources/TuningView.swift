@@ -1,35 +1,35 @@
 import SwiftUI
 
-// ── Tab "Abstimmung": Kennfeld, Zuendkurve, Vorher/Nachher ───────
+// ── Tab "Abstimmung": Gemisch-Check, Kennfeld, Zuendkurve, Vorher/Nachher ──
 
 enum TuningPage: String, CaseIterable, Identifiable {
-    case map, ignition, compare, tools
+    case check, map, ignition, compare, tools
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .check:    return "Check"
         case .map:      return "Kennfeld"
         case .ignition: return "Zündung"
         case .compare:  return "Vergleich"
-        case .tools:    return "Werkzeuge"
+        case .tools:    return "Mehr"
         }
     }
 }
 
+/// Beobachtet nur die Messreihen. Was Live-Werte braucht, beobachtet das
+/// Bluetooth selbst, sonst wuerde der ganze Tab 10-mal je Sekunde neu gebaut.
 struct TuningView: View {
+    let model: AppModel
     @ObservedObject var tuning: TuningStore
-    @ObservedObject var ble: BLEManager
-    let idle: IdleAssistant
-    let tipIns: TipInAnalyzer
 
-    @State private var page: TuningPage = .map
+    @State private var page: TuningPage = .check
     @State private var askName = false
     @State private var name = ""
     @State private var confirmReset = false
     @State private var before: UUID?
     @State private var after: UUID?
-    @AppStorage("scatterByLoad") private var byLoad = false
 
     var body: some View {
         NavigationStack {
@@ -43,24 +43,20 @@ struct TuningView: View {
                     .pickerStyle(.segmented)
 
                     switch page {
+                    case .check:
+                        CheckPanel(model: model, tuning: tuning, tipIns: model.tipIns,
+                                   pulls: model.pulls, carb: model.carb)
                     case .map:
                         sessionHeader
-                        KennfeldPanel(session: tuning.current, rpm: ble.tune?.rpm, map: ble.tune?.mapKPa)
-                        lambdaScatter
+                        KennfeldSection(session: tuning.current, ble: model.ble)
                     case .ignition:
                         sessionHeader
-                        IgnitionPanel(session: tuning.current, rpm: ble.tune?.rpm,
-                                      advance: ble.tune?.advance, byLoad: byLoad,
-                                      program: ble.tuneProgram)
-                        ToolLink(title: "Zündkurven der 123",
-                                 subtitle: ToolsPanel.programSubtitle(ble.tuneProgram),
-                                 symbol: "memorychip") {
-                            Tune123ProgramView(ble: ble, session: tuning.current)
-                        }
+                        IgnitionSection(session: tuning.current, ble: model.ble)
                     case .compare:
                         ComparePanel(tuning: tuning, before: $before, after: $after)
                     case .tools:
-                        ToolsPanel(tuning: tuning, ble: ble, idle: idle, tipIns: tipIns)
+                        ToolsPanel(model: model, tuning: tuning, ble: model.ble, tipIns: model.tipIns,
+                                   pulls: model.pulls, carb: model.carb)
                     }
                 }
                 .padding(16)
@@ -125,9 +121,23 @@ struct TuningView: View {
             }
         }
     }
+}
+
+/// Kennfeld und Punktewolke mit dem aktuellen Betriebspunkt
+struct KennfeldSection: View {
+    let session: TuningSession
+    @ObservedObject var ble: BLEManager
+    @AppStorage("scatterByLoad") private var byLoad = false
+
+    var body: some View {
+        VStack(spacing: 12) {
+            KennfeldPanel(session: session, rpm: ble.tune?.rpm, map: ble.tune?.mapKPa)
+            lambdaScatter
+        }
+    }
 
     private var lambdaScatter: some View {
-        let pts = tuning.current.lambdaPoints.map {
+        let pts = session.lambdaPoints.map {
             ScatterPoint(rpm: Double($0.r), lambda: Double($0.v), mapKPa: $0.m.map { Double($0) })
         }
         return Panel {
@@ -145,29 +155,67 @@ struct TuningView: View {
                 ScatterPlot(points: pts, currentRPM: ble.tune?.rpm,
                             currentLambda: Metric.lambda.current(ble), byLoad: byLoad)
                     .frame(height: 210)
+                Text(byLoad ? "Blau wenig Last, orange viel Last."
+                            : "Farbe: Abstand zum Ziel-Lambda des jeweiligen Bereichs.")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.muted)
             }
         }
     }
 }
 
-// ── Werkzeuge: Leerlauf-Assistent, Gasstoesse, Duesen-Rechner ────
-struct ToolsPanel: View {
-    @ObservedObject var tuning: TuningStore
+struct IgnitionSection: View {
+    let session: TuningSession
     @ObservedObject var ble: BLEManager
-    let idle: IdleAssistant
+    @AppStorage("scatterByLoad") private var byLoad = false
+
+    var body: some View {
+        VStack(spacing: 12) {
+            IgnitionPanel(session: session, rpm: ble.tune?.rpm,
+                          advance: ble.tune?.advance, byLoad: byLoad,
+                          program: ble.tuneProgram)
+            ToolLink(title: "Zündkurven der 123",
+                     subtitle: ToolsPanel.programSubtitle(ble.tuneProgram),
+                     symbol: "memorychip") {
+                Tune123ProgramView(ble: ble, session: session)
+            }
+        }
+    }
+}
+
+// ── Mehr: Werkzeuge ──────────────────────────────────────────────
+struct ToolsPanel: View {
+    let model: AppModel
+    @ObservedObject var tuning: TuningStore
+    let ble: BLEManager
     @ObservedObject var tipIns: TipInAnalyzer
+    @ObservedObject var pulls: PullStore
+    @ObservedObject var carb: CarbLog
 
     var body: some View {
         VStack(spacing: 10) {
-            ToolLink(title: "Zündkurven der 123",
-                     subtitle: Self.programSubtitle(ble.tuneProgram),
-                     symbol: "memorychip") {
-                Tune123ProgramView(ble: ble, session: tuning.current)
+            SectionLabel(text: "Vergaser")
+            ToolLink(title: "Bedüsung und Logbuch",
+                     subtitle: carb.book.entries.first.map { "Zuletzt: " + $0.title } ?? "Düsen eintragen, Änderungen festhalten",
+                     symbol: "book.closed.fill") {
+                CarbLogView(carb: carb, tuning: tuning)
             }
             ToolLink(title: "Leerlauf-Assistent",
                      subtitle: "Gemischschraube Schritt für Schritt einstellen",
                      symbol: "speedometer") {
-                IdleAssistantView(ble: ble, idle: idle)
+                IdleAssistantView(ble: ble, idle: model.idle)
+            }
+            ToolLink(title: "Düsen-Rechner",
+                     subtitle: "Neue Düsengröße aus dem Kennfeld",
+                     symbol: "function") {
+                JetCalcView(sessions: tuning.all)
+            }
+            SectionLabel(text: "Fahrversuche")
+            ToolLink(title: "Züge unter Last",
+                     subtitle: pulls.pulls.isEmpty ? "Vollgas-Züge: Lambda und Leistung über der Drehzahl"
+                                                   : "\(pulls.pulls.count) aufgezeichnet",
+                     symbol: "gauge.with.dots.needle.67percent") {
+                PullsView(store: pulls)
             }
             ToolLink(title: "Gasstöße",
                      subtitle: tipIns.events.isEmpty ? "Beschleunigerpumpe beurteilen"
@@ -175,12 +223,13 @@ struct ToolsPanel: View {
                      symbol: "waveform.path.ecg") {
                 TipInView(analyzer: tipIns)
             }
-            ToolLink(title: "Düsen-Rechner",
-                     subtitle: "Neue Düsengröße aus dem Kennfeld",
-                     symbol: "function") {
-                JetCalcView(sessions: tuning.all)
+            SectionLabel(text: "Zündung")
+            ToolLink(title: "Zündkurven der 123",
+                     subtitle: Self.programSubtitle(ble.tuneProgram),
+                     symbol: "memorychip") {
+                Tune123ProgramView(ble: ble, session: tuning.current)
             }
-            Text("Zündwinkel im Kennfeld: unter „Kennfeld“ den Schalter „Zündwinkel einblenden“ oder die Ansicht „Zündung“ wählen.")
+            Text("Die technische Diagnose der Verbindungen und Sensoren findest du unter Einstellungen › Diagnose.")
                 .font(.system(size: 12))
                 .foregroundColor(Theme.muted)
                 .frame(maxWidth: .infinity, alignment: .leading)

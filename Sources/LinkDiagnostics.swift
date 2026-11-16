@@ -143,7 +143,7 @@ struct SelfCheckInput {
 
 enum SelfCheck {
     private static func f(_ v: Double, _ d: Int) -> String {
-        String(format: "%.\(d)f", v).replacingOccurrences(of: ".", with: ",")
+        String(format: "%.\(d)f", v)
     }
 
     static func run(_ i: SelfCheckInput) -> [DiagCheck] {

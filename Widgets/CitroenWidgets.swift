@@ -24,6 +24,27 @@ enum LiveTheme {
         return l
     }
 
+    static func level(_ n: Int) -> Color {
+        switch n {
+        case 1:  return ok
+        case 2:  return warn
+        case 3:  return crit
+        default: return muted
+        }
+    }
+
+    static func lambda(_ s: CitroenActivityAttributes.ContentState) -> Color {
+        guard lambdaValue(s.lambda) != nil else { return muted }
+        if let n = s.lambdaLevel { return level(n) }
+        return lambda(s.lambda)
+    }
+
+    static func oilP(_ s: CitroenActivityAttributes.ContentState) -> Color {
+        guard s.oilP != nil else { return muted }
+        if let n = s.oilPLevel { return level(n) }
+        return oilP(s.oilP)
+    }
+
     static func lambda(_ l: Double?) -> Color {
         guard let l = lambdaValue(l) else { return muted }
         if l < 0.94 || l > 1.06 { return crit }
@@ -98,14 +119,14 @@ struct LockScreenLiveView: View {
             }
             HStack(alignment: .top) {
                 LiveValue(title: "LAMBDA",
-                          text: LiveTheme.text(LiveTheme.lambdaValue(state.lambda), "%.3f"),
-                          color: LiveTheme.lambda(state.lambda))
+                          text: LiveTheme.text(LiveTheme.lambdaValue(state.lambda), "%.2f"),
+                          color: LiveTheme.lambda(state))
                 Spacer(minLength: 4)
                 LiveValue(title: "ÖLTEMP °C", text: LiveTheme.text(state.oilT, "%.0f"),
                           color: LiveTheme.oilT(state.oilT))
                 Spacer(minLength: 4)
                 LiveValue(title: "ÖLDRUCK", text: LiveTheme.text(state.oilP, "%.1f"),
-                          color: LiveTheme.oilP(state.oilP))
+                          color: LiveTheme.oilP(state))
                 Spacer(minLength: 4)
                 LiveValue(title: "U/MIN", text: LiveTheme.text(state.rpm, "%.0f"))
                 Spacer(minLength: 4)
@@ -126,8 +147,8 @@ struct CitroenLiveActivity: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     LiveValue(title: "LAMBDA",
-                              text: LiveTheme.text(LiveTheme.lambdaValue(context.state.lambda), "%.3f"),
-                              color: LiveTheme.lambda(context.state.lambda), size: 24)
+                              text: LiveTheme.text(LiveTheme.lambdaValue(context.state.lambda), "%.2f"),
+                              color: LiveTheme.lambda(context.state), size: 24)
                         .padding(.leading, 6)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -139,7 +160,7 @@ struct CitroenLiveActivity: Widget {
                     VStack(spacing: 6) {
                         HStack {
                             LiveValue(title: "ÖLDRUCK", text: LiveTheme.text(context.state.oilP, "%.1f"),
-                                      color: LiveTheme.oilP(context.state.oilP), size: 18)
+                                      color: LiveTheme.oilP(context.state), size: 18)
                             Spacer()
                             LiveValue(title: "U/MIN", text: LiveTheme.text(context.state.rpm, "%.0f"), size: 18)
                             Spacer()
@@ -157,7 +178,7 @@ struct CitroenLiveActivity: Widget {
             } compactLeading: {
                 Text(LiveTheme.text(LiveTheme.lambdaValue(context.state.lambda), "%.2f"))
                     .font(.system(size: 15, weight: .heavy, design: .rounded).monospacedDigit())
-                    .foregroundColor(LiveTheme.lambda(context.state.lambda))
+                    .foregroundColor(LiveTheme.lambda(context.state))
             } compactTrailing: {
                 Text(LiveTheme.text(context.state.oilT, "%.0f") + "°")
                     .font(.system(size: 15, weight: .heavy, design: .rounded).monospacedDigit())
@@ -165,7 +186,7 @@ struct CitroenLiveActivity: Widget {
             } minimal: {
                 Text("λ")
                     .font(.system(size: 15, weight: .heavy))
-                    .foregroundColor(context.state.alert == nil ? LiveTheme.lambda(context.state.lambda) : LiveTheme.crit)
+                    .foregroundColor(context.state.alert == nil ? LiveTheme.lambda(context.state) : LiveTheme.crit)
             }
         }
     }
