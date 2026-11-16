@@ -27,7 +27,7 @@ struct CarbSetup: Codable, Equatable {
             case .idleJet1:     return "Leerlaufdüse Stufe 1"
             case .main1:        return "Hauptdüse Stufe 1"
             case .air1:         return "Luftkorrekturdüse Stufe 1"
-            case .idleJet2:     return "Leerlauf-/Übergangsdüse Stufe 2"
+            case .idleJet2:     return "Übergangsdüse Stufe 2"
             case .main2:        return "Hauptdüse Stufe 2"
             case .air2:         return "Luftkorrekturdüse Stufe 2"
             case .pumpJet:      return "Pumpendüse"

@@ -62,10 +62,18 @@ struct LambdaLook {
 enum LiveJudge {
     /// Lambda mit Drehzahl und Saugrohrdruck der 123, sonst nach festen Grenzen
     static func lambda(_ v: Double?, rpm: Double?, kPa: Double?) -> LambdaLook {
+        var regime: Regime?
+        if let r = rpm, r >= 300, let k = kPa { regime = Regime.of(rpm: r, kPa: k) }
+        return lambda(v, rpm: rpm, regime: regime)
+    }
+
+    /// Wie oben, mit schon bestimmtem Betriebsbereich
+    static func lambda(_ v: Double?, rpm: Double?, regime: Regime?) -> LambdaLook {
         guard let v else { return LambdaLook(level: .off, text: "keine Daten", target: nil) }
         if v > 2 { return LambdaLook(level: .off, text: "Sonde nicht bereit", target: nil) }
         if let r = rpm, r < 300 { return LambdaLook(level: .info, text: "Motor steht", target: nil) }
-        if LiveContext.byTarget, let j = MixtureJudge.live(lambda: v, rpm: rpm, kPa: kPa, targets: LiveContext.targets) {
+        if LiveContext.byTarget, let g = regime {
+            let j = MixtureJudge.judge(lambda: v, regime: g, targets: LiveContext.targets)
             let area = j.regime?.title ?? ""
             let text = j.target == nil ? area : area + " · " + j.text
             return LambdaLook(level: j.severity.level, text: text, target: j.target)
@@ -83,7 +91,7 @@ enum LiveJudge {
 
 extension BLEManager {
     var lambdaLook: LambdaLook {
-        LiveJudge.lambda(shown?.lambda, rpm: tune?.rpm, kPa: tune?.mapKPa)
+        LiveJudge.lambda(shown?.lambda, rpm: tune?.rpm, regime: regime)
     }
 }
 

@@ -78,6 +78,8 @@ final class BLEManager: NSObject, ObservableObject {
     @Published private(set) var bridgeCanUpdate = false    // Bridge v3+: Update-Modus per App
     @Published private(set) var tuneProgram: Tune123Program?   // zuletzt gelesene Programmierung der 123
     @Published private(set) var programRead: ProgramRead = .idle
+    /// Betriebsbereich aus Drehzahl und Saugrohrdruck der 123, nil ohne Werte oder bei stehendem Motor
+    @Published private(set) var regime: Regime?
 
     var isDemo: Bool { bridgeState == .demo }
     var noSignal: Bool { bridgeState == .live && warning != nil }
@@ -121,6 +123,9 @@ final class BLEManager: NSObject, ObservableObject {
     private var tuneLiveSince = Date.distantPast
     private var autoReadPending = false
     private var idleTimerOff = false
+    private var regimeCandidate: Regime?
+    private var regimeSince = Date.distantPast
+    private var demoLambda = 1.0
     private var lastDiagTick = Date.distantPast
     private var lastRSSI = Date.distantPast
     private var rawLogUntil = Date.distantPast      // so lange maskierte Rohdaten ins Protokoll
@@ -330,7 +335,14 @@ final class BLEManager: NSObject, ObservableObject {
         demoTime += 0.1
         demoCount += 1
         let n = { Double.random(in: -0.5...0.5) }
-        let r = Reading(lambda:   0.995 + 0.035 * sin(demoTime / 3.1) + 0.012 * n(),
+        // Lambda wie bei einem brauchbar abgestimmten Vergaser: je Bereich nah am Ziel,
+        // nur der Uebergang zur zweiten Stufe etwas zu mager (damit der Check etwas findet)
+        let load = tuneDemo.load
+        let demoRegime = Regime.of(rpm: load.rpm, kPa: load.kPa)
+        var goal = MixtureTargets.defaults.target(demoRegime) ?? 0.92
+        if demoRegime == .transition { goal += 0.07 }
+        demoLambda += (goal - demoLambda) * 0.12
+        let r = Reading(lambda:   demoLambda + 0.012 * sin(demoTime / 3.1) + 0.012 * n(),
                         pressure: 2.6 + 0.9 * sin(demoTime / 7) + 0.05 * n(),
                         temp:     min(96, 72 + demoTime * 0.12) + 0.2 * n(),
                         tank:     max(8, 62 - demoTime * 0.02),
@@ -389,8 +401,10 @@ final class BLEManager: NSObject, ObservableObject {
             }
         }
 
-        // Kommt keine Drehzahl mehr, steht der Motor: nicht die letzte Drehzahl stehen lassen
-        if var t = tuneTarget, let r = t.rpm, r > 0,
+        // Kommt keine Drehzahl mehr, steht der Motor: nicht die letzte Drehzahl stehen lassen.
+        // Nicht waehrend des Lesens: Die Antworten der 123 verdraengen so lange die Live-Frames.
+        if var t = tuneTarget, let r = t.rpm, r > 0, readStep < 0,
+           now.timeIntervalSince(readSent) > Self.readTimeout,
            now.timeIntervalSince(lastRPMFrame) > Tune123.rpmStaleAfter {
             t.rpm = 0
             tuneTarget = t
@@ -405,6 +419,19 @@ final class BLEManager: NSObject, ObservableObject {
         let tuneFresh = (tuneState == .live || tuneState == .demo)
             && now.timeIntervalSince(lastTuneFrame) <= Self.tuneStaleAfter
         if !tuneFresh, tune != nil { tune = nil }
+
+        // Betriebsbereich fuer die Lambda-Bewertung. Ein Wechsel gilt erst nach einer halben
+        // Sekunde, sonst flackert die Anzeige an den Grenzen zwischen zwei Bereichen.
+        var candidate: Regime?
+        if let t = tune, let r = t.rpm, r >= 300, let k = t.mapKPa { candidate = Regime.of(rpm: r, kPa: k) }
+        if candidate == regime {
+            regimeCandidate = candidate
+        } else if candidate != regimeCandidate {
+            regimeCandidate = candidate
+            regimeSince = now
+        } else if regime == nil || candidate == nil || now.timeIntervalSince(regimeSince) >= 0.5 {
+            regime = candidate
+        }
 
         updateWarnings(now: now)
 

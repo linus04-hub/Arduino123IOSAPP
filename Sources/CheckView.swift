@@ -132,7 +132,7 @@ struct CheckPanel: View {
                             .font(.system(size: 15, weight: .bold, design: .rounded).monospacedDigit())
                             .foregroundColor(Theme.fg)
                     }
-                    Text(f.verdict + (f.preliminary ? " (vorläufig)" : ""))
+                    Text(f.verdict)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(f.severity.color)
                         .lineLimit(1)
@@ -152,6 +152,7 @@ struct CheckPanel: View {
         var parts: [String] = []
         if let t = f.target { parts.append(String(format: "Ziel %.2f", t)) }
         if f.seconds > 0 { parts.append(FindingDetailView.timeText(f.seconds)) }
+        if f.preliminary { parts.append("vorläufig") }
         if parts.isEmpty { return f.area == .tipIn ? "Beschleunigerpumpe" : (f.area.regime?.area ?? "") }
         return parts.joined(separator: " · ")
     }

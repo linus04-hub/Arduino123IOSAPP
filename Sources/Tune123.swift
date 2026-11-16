@@ -420,10 +420,15 @@ struct Tune123Demo {
     private var pending: [UInt8] = []
     private let order: [UInt8] = [0x30, 0x31, 0x32, 0x30, 0x33, 0x34, 0x30, 0x35, 0x41, 0x42]
 
+    /// Drehzahl und Saugrohrdruck der Demo zum aktuellen Zeitpunkt, ohne Rauschen
+    var load: (rpm: Double, kPa: Double) {
+        (max(800, 2000 + 1500 * sin(t / 5)), min(100, max(30, 62 + 30 * sin(t / 5 + 1.2))))
+    }
+
     mutating func next() -> Data {
         t += 0.25
-        let rpm = max(800, 2000 + 1500 * sin(t / 5) + Double.random(in: -60...60))
-        let map = min(100, max(30, 62 + 30 * sin(t / 5 + 1.2)))
+        let rpm = max(800, load.rpm + Double.random(in: -60...60))
+        let map = load.kPa
         // so, wie die Demo-Programmierung es vorgibt
         let advance = Tune123Program.demo.expected(rpm: rpm, kPa: map) ?? 10
 
