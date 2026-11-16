@@ -2,70 +2,6 @@ import Foundation
 import CoreBluetooth
 import UIKit
 
-// ── Messwerte, wie sie die BLE-Bridge schickt ─────────────────────
-struct Reading: Equatable {
-    var lambda: Double     // 4.5 = Sonde nicht bereit
-    var pressure: Double   // bar, -1 = Sensorfehler
-    var temp: Double       // °C,  -1 = Sensorfehler
-    var tank: Double       // %, 255 = kein Tankwert
-    var flags: UInt8       // Bit0: Bridge-Eingang ok, Bit1: Arduino-Signal ok
-
-    var c6Ok: Bool      { flags & 0x01 != 0 }
-    var arduinoOk: Bool { flags & 0x02 != 0 }
-    var tankValue: Double? { tank <= 100 ? tank : nil }
-}
-
-extension Reading {
-    /// 8-Byte-Paket, Little Endian — Aufbau wie `struct Packet` in ESP32_BLE_Bridge_V1
-    init?(packet data: Data) {
-        guard data.count >= 8 else { return nil }
-        let b = [UInt8](data.prefix(8))
-        let lam = UInt16(b[0]) | (UInt16(b[1]) << 8)
-        let pr  = Int16(bitPattern: UInt16(b[2]) | (UInt16(b[3]) << 8))
-        let t   = Int16(bitPattern: UInt16(b[4]) | (UInt16(b[5]) << 8))
-        self.init(lambda: Double(lam) / 1000,
-                  pressure: Double(pr) / 100,
-                  temp: Double(t) / 10,
-                  tank: Double(b[6]),
-                  flags: b[7])
-    }
-
-    /// Gegenrichtung, damit der Demo-Modus durch denselben Decoder laeuft
-    var packet: Data {
-        let lam = UInt16(clamping: Int((lambda * 1000).rounded()))
-        let pr  = UInt16(bitPattern: Int16(clamping: Int((pressure * 100).rounded())))
-        let t   = UInt16(bitPattern: Int16(clamping: Int((temp * 10).rounded())))
-        let tk  = UInt8(clamping: Int(tank.rounded()))
-        return Data([UInt8(lam & 0xFF), UInt8(lam >> 8),
-                     UInt8(pr & 0xFF),  UInt8(pr >> 8),
-                     UInt8(t & 0xFF),   UInt8(t >> 8),
-                     tk, flags])
-    }
-}
-
-/// Ein Zeitpunkt im Verlauf (alle 0,25 s). nil = kein gueltiger Wert (Luecke in der Kurve)
-struct Sample: Equatable {
-    let time: Date
-    var lambda: Double? = nil
-    var rpm: Double? = nil
-    var mapKPa: Double? = nil
-    var oilP: Double? = nil
-    var oilT: Double? = nil
-    var tank: Double? = nil
-    var advance: Double? = nil
-    var voltage: Double? = nil
-    var coil: Double? = nil
-    var moduleTemp: Double? = nil
-    var speed: Double? = nil          // km/h vom iPhone-GPS
-}
-
-/// Ein Punkt fuer "Lambda ueber Drehzahl"
-struct ScatterPoint: Equatable {
-    let rpm: Double
-    let lambda: Double
-    let mapKPa: Double?
-}
-
 enum LinkState: Equatable {
     case searching, connecting, live, demo, bluetoothOff, unauthorized
 }
@@ -76,6 +12,30 @@ enum ProgramRead: Equatable {
     case reading(Int)        // Schritt 0–4 (Block 0–3, Version)
     case done
     case failed
+}
+
+/// Diagnose-Daten getrennt vom BLEManager, damit die Anzeigen davon nicht neu zeichnen.
+/// Der Stand wird nur veroeffentlicht, solange die Diagnose-Seite offen ist.
+final class DiagnosticsStore: ObservableObject {
+    @Published private(set) var snapshot = LinkDiagnostics()
+    var work = LinkDiagnostics()
+    var visible = false {
+        didSet { if visible { snapshot = work } }
+    }
+
+    func publish() {
+        if visible { snapshot = work }
+    }
+
+    func note(_ text: String) {
+        work.note(text)
+    }
+
+    func resetCounters() {
+        work.resetCounters()
+        work.note("Zähler zurückgesetzt")
+        publish()
+    }
 }
 
 // ── Bluetooth: Bridge (Lambda/Oel/Tank) und 123ignition gleichzeitig ──
@@ -118,6 +78,8 @@ final class BLEManager: NSObject, ObservableObject {
     @Published private(set) var bridgeCanUpdate = false    // Bridge v3+: Update-Modus per App
     @Published private(set) var tuneProgram: Tune123Program?   // zuletzt gelesene Programmierung der 123
     @Published private(set) var programRead: ProgramRead = .idle
+    /// Betriebsbereich aus Drehzahl und Saugrohrdruck der 123, nil ohne Werte oder bei stehendem Motor
+    @Published private(set) var regime: Regime?
 
     var isDemo: Bool { bridgeState == .demo }
     var noSignal: Bool { bridgeState == .live && warning != nil }
@@ -127,6 +89,8 @@ final class BLEManager: NSObject, ObservableObject {
     var onSample: ((Sample) -> Void)?
     /// Liefert das GPS-Tempo in km/h
     var speedSource: () -> Double? = { nil }
+    /// Zaehler, Raten und Protokoll fuer die Diagnose-Seite
+    let diagnostics = DiagnosticsStore()
 
     private var central: CBCentralManager!
     private var bridge: CBPeripheral?
@@ -159,6 +123,12 @@ final class BLEManager: NSObject, ObservableObject {
     private var tuneLiveSince = Date.distantPast
     private var autoReadPending = false
     private var idleTimerOff = false
+    private var regimeCandidate: Regime?
+    private var regimeSince = Date.distantPast
+    private var demoLambda = 1.0
+    private var lastDiagTick = Date.distantPast
+    private var lastRSSI = Date.distantPast
+    private var rawLogUntil = Date.distantPast      // so lange maskierte Rohdaten ins Protokoll
 
     override init() {
         super.init()
@@ -209,12 +179,16 @@ final class BLEManager: NSObject, ObservableObject {
         readStep = 0
         readTries = 0
         programRead = .reading(0)
+        diagnostics.note(force ? "Zündkurven lesen (trotz Drehzahl)" : "Zündkurven lesen")
         sendReadStep()
     }
 
     private func sendReadStep() {
         let cmd = readStep < Tune123.readBlocks.count ? Tune123.readBlocks[readStep] : Tune123.readVersion
         readSent = Date()
+        rawLogUntil = readSent.addingTimeInterval(Self.readTimeout + 1)
+        diagnostics.note("→ " + (readStep < Tune123.readBlocks.count ? "Block \(readStep) anfordern" : "Version anfordern")
+                         + (readTries > 0 ? " (2. Versuch)" : ""))
         if tuneState == .demo {
             if let r = Tune123Demo.response(to: cmd) { tuneDemo.inject(r) }
             return
@@ -236,6 +210,7 @@ final class BLEManager: NSObject, ObservableObject {
     }
 
     private func readTimedOut() {
+        diagnostics.note("Keine Antwort auf " + (readStep < Tune123.readBlocks.count ? "Block \(readStep)" : "Version"))
         if readTries < 1 {
             readTries += 1
             sendReadStep()
@@ -250,8 +225,11 @@ final class BLEManager: NSObject, ObservableObject {
         readStep = -1
         guard var p = Tune123Program.decode(readBlocks, version: readVersionText) else {
             programRead = .failed
+            diagnostics.note("Lesen fehlgeschlagen: Block 0 fehlt")
             return
         }
+        diagnostics.note("Gelesen: Blöcke " + readBlocks.keys.sorted().map { String($0) }.joined(separator: ", ")
+                         + (readVersionText == nil ? ", keine Version" : ", Version " + (readVersionText ?? "")))
         if tuneState == .demo {
             p.isDemo = true
         } else {
@@ -267,12 +245,14 @@ final class BLEManager: NSObject, ObservableObject {
         readStep = -1
         readBlocks = [:]
         programRead = failed ? .failed : .idle
+        if failed { diagnostics.note("Lesen abgebrochen") }
     }
 
     private func handleProgramFrame(_ f: Tune123Frame) {
         guard readStep >= 0 else { return }
         switch f {
         case .block(let n, let bytes):
+            diagnostics.note("← Block \(n) empfangen")
             readBlocks[n] = bytes
             if n == readStep { nextReadStep() }
         case .version(let v):
@@ -309,6 +289,9 @@ final class BLEManager: NSObject, ObservableObject {
         readStep = -1
         readBlocks = [:]
         programRead = .idle
+        tuneParser.resetStats()
+        diagnostics.work.resetCounters()
+        diagnostics.note(isDemo ? "Demo beendet" : "Demo gestartet")
         if isDemo {
             target = nil
             tuneTarget = nil
@@ -352,7 +335,14 @@ final class BLEManager: NSObject, ObservableObject {
         demoTime += 0.1
         demoCount += 1
         let n = { Double.random(in: -0.5...0.5) }
-        let r = Reading(lambda:   0.995 + 0.035 * sin(demoTime / 3.1) + 0.012 * n(),
+        // Lambda wie bei einem brauchbar abgestimmten Vergaser: je Bereich nah am Ziel,
+        // nur der Uebergang zur zweiten Stufe etwas zu mager (damit der Check etwas findet)
+        let load = tuneDemo.load
+        let demoRegime = Regime.of(rpm: load.rpm, kPa: load.kPa)
+        var goal = MixtureTargets.defaults.target(demoRegime) ?? 0.92
+        if demoRegime == .transition { goal += 0.07 }
+        demoLambda += (goal - demoLambda) * 0.12
+        let r = Reading(lambda:   demoLambda + 0.012 * sin(demoTime / 3.1) + 0.012 * n(),
                         pressure: 2.6 + 0.9 * sin(demoTime / 7) + 0.05 * n(),
                         temp:     min(96, 72 + demoTime * 0.12) + 0.2 * n(),
                         tank:     max(8, 62 - demoTime * 0.02),
@@ -411,15 +401,52 @@ final class BLEManager: NSObject, ObservableObject {
             }
         }
 
-        // Kommt keine Drehzahl mehr, steht der Motor: nicht die letzte Drehzahl stehen lassen
-        if var t = tuneTarget, let r = t.rpm, r > 0,
+        // Kommt keine Drehzahl mehr, steht der Motor: nicht die letzte Drehzahl stehen lassen.
+        // Nicht waehrend des Lesens: Die Antworten der 123 verdraengen so lange die Live-Frames.
+        if var t = tuneTarget, let r = t.rpm, r > 0, readStep < 0,
+           now.timeIntervalSince(readSent) > Self.readTimeout,
            now.timeIntervalSince(lastRPMFrame) > Tune123.rpmStaleAfter {
             t.rpm = 0
             tuneTarget = t
             tune = t
         }
 
+        // Anzeigen leeren, sobald nichts Frisches mehr kommt. Sonst stehen die
+        // letzten Werte da, als waeren sie aktuell.
+        let bridgeFresh = (bridgeState == .live || bridgeState == .demo)
+            && now.timeIntervalSince(lastPacket) <= Self.bridgeStaleAfter
+        if !bridgeFresh, shown != nil { shown = nil }
+        let tuneFresh = (tuneState == .live || tuneState == .demo)
+            && now.timeIntervalSince(lastTuneFrame) <= Self.tuneStaleAfter
+        if !tuneFresh, tune != nil { tune = nil }
+
+        // Betriebsbereich fuer die Lambda-Bewertung. Ein Wechsel gilt erst nach einer halben
+        // Sekunde, sonst flackert die Anzeige an den Grenzen zwischen zwei Bereichen.
+        var candidate: Regime?
+        if let t = tune, let r = t.rpm, r >= 300, let k = t.mapKPa { candidate = Regime.of(rpm: r, kPa: k) }
+        if candidate == regime {
+            regimeCandidate = candidate
+        } else if candidate != regimeCandidate {
+            regimeCandidate = candidate
+            regimeSince = now
+        } else if regime == nil || candidate == nil || now.timeIntervalSince(regimeSince) >= 0.5 {
+            regime = candidate
+        }
+
         updateWarnings(now: now)
+
+        // Diagnose: Raten einmal je Sekunde, Empfangsstaerke alle 3 s
+        if now.timeIntervalSince(lastDiagTick) >= 1 {
+            lastDiagTick = now
+            diagnostics.work.tune = tuneParser.stats
+            diagnostics.work.tick(now: now)
+            diagnostics.publish()
+        }
+        if now.timeIntervalSince(lastRSSI) >= 3 {
+            lastRSSI = now
+            if bridgeState == .live { bridge?.readRSSI() } else { diagnostics.work.bridgeRSSI = nil }
+            if tuneState == .live { ignition?.readRSSI() } else { diagnostics.work.tuneRSSI = nil }
+        }
 
         // Bildschirm nicht sperren, solange ein Geraet verbunden ist
         if anyLive != idleTimerOff {
@@ -494,13 +521,22 @@ final class BLEManager: NSObject, ObservableObject {
     }
 
     private func receiveBridge(_ data: Data) {
-        guard let r = Reading(packet: data) else { return }
+        guard let r = Reading(packet: data) else {
+            diagnostics.work.bridgeBad += 1
+            return
+        }
+        diagnostics.work.bridgePackets += 1
         target = r
         if r != shown { shown = r }
         lastPacket = Date()
     }
 
     private func receiveTune(_ data: Data) {
+        // Waehrend eines Lesebefehls den Aufbau der Antwort mitschreiben. Nur maskiert:
+        // In Block 1 steht der Pincode, der darf nirgends auftauchen.
+        if Date() < rawLogUntil {
+            diagnostics.note("← \(data.count) B  " + Tune123.mask([UInt8](data)))
+        }
         let frames = tuneParser.feed(data)
         guard !frames.isEmpty else { return }
         var t = tuneTarget ?? TuneReading()
@@ -573,6 +609,7 @@ extension BLEManager: CBCentralManagerDelegate {
             shown = nil
             tune = nil
             tuneParser.reset()
+            diagnostics.note(central.state == .unauthorized ? "Kein Bluetooth-Zugriff" : "Bluetooth aus")
             let s: LinkState = central.state == .unauthorized ? .unauthorized : .bluetoothOff
             bridgeState = s
             tuneState = s
@@ -588,12 +625,16 @@ extension BLEManager: CBCentralManagerDelegate {
 
         if bridge == nil, uuids.contains(Self.bridgeService) || name.hasPrefix("Citroen") {
             bridge = peripheral             // starke Referenz halten, sonst bricht iOS die Verbindung ab
+            diagnostics.note("Anzeige gefunden: " + (name.isEmpty ? "ohne Name" : name) + ", \(RSSI) dBm")
             bridgeState = .connecting
             central.connect(peripheral, options: nil)
         } else if ignition == nil,
                   uuids.contains(Self.tuneService)
                   || (uuids.contains(Self.nusService) && is123(name: name, advertisementData: advertisementData)) {
             ignition = peripheral
+            diagnostics.work.tuneName = name.isEmpty ? nil : name
+            diagnostics.note("123 gefunden: " + (name.isEmpty ? "ohne Name" : name) + ", \(RSSI) dBm, "
+                             + (uuids.contains(Self.tuneService) ? "BRSP" : "Nordic UART"))
             tuneState = .connecting
             central.connect(peripheral, options: nil)
         }
@@ -611,6 +652,8 @@ extension BLEManager: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        diagnostics.note((peripheral == bridge ? "Anzeige" : "123") + ": Verbinden fehlgeschlagen"
+                         + (error.map { " (" + $0.localizedDescription + ")" } ?? ""))
         if peripheral == bridge { bridge = nil; forgetBridgeControl() }
         if peripheral == ignition { ignition = nil; tuneRXChar = nil }
         retryLater()
@@ -620,11 +663,16 @@ extension BLEManager: CBCentralManagerDelegate {
         guard !isDemo else { return }
         // Verbindungswunsch bleibt offen: iOS verbindet von selbst neu,
         // sobald das Geraet wieder Strom hat und in Reichweite ist.
+        let why = error.map { " (" + $0.localizedDescription + ")" } ?? ""
         if peripheral == bridge {
+            diagnostics.note("Anzeige getrennt" + why)
             forgetBridgeControl()
+            shown = nil
             bridgeState = .connecting
             central.connect(peripheral, options: nil)
         } else if peripheral == ignition {
+            diagnostics.note("123 getrennt" + why)
+            tune = nil
             tuneRXChar = nil
             stopRead(failed: false)
             autoReadPending = false
@@ -672,6 +720,8 @@ extension BLEManager: CBPeripheralDelegate {
                 bridgeVersion = nil
             }
             lastPacket = Date()
+            diagnostics.work.bridgeConnects += 1
+            diagnostics.note("Anzeige verbunden" + (bridgeCtrlChar == nil ? " (v2 oder älter)" : ""))
             bridgeState = .live
 
         } else if peripheral == ignition {
@@ -687,12 +737,23 @@ extension BLEManager: CBPeripheralDelegate {
             }
             write(Tune123.hello, to: rx, on: peripheral)
             tuneRXChar = rx
+            tuneTarget = nil             // keine Werte von vor der Unterbrechung uebernehmen
+            lastRPMFrame = .distantPast
+            diagnostics.work.tuneVariant = nus ? "Nordic UART" : "BRSP"
+            diagnostics.work.tuneConnects += 1
+            diagnostics.note("123 verbunden (" + (nus ? "Nordic UART" : "BRSP") + ")")
             lastTuneFrame = Date()       // Schonfrist, bevor "keine Daten" erscheint
             lastKeepalive = Date()
             tuneLiveSince = Date()
             autoReadPending = true       // Kurven lesen, falls der Motor steht
             tuneState = .live
         }
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
+        guard error == nil else { return }
+        if peripheral == bridge { diagnostics.work.bridgeRSSI = RSSI.intValue }
+        if peripheral == ignition { diagnostics.work.tuneRSSI = RSSI.intValue }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {

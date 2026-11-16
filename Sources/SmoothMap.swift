@@ -8,13 +8,14 @@ import CoreGraphics
 // Antippen einer Stelle zeigt Wert, Streuung und Anzahl dieser Zelle.
 
 enum MapMode: String, CaseIterable, Identifiable {
-    case lambda, spread, count, advance
+    case lambda, delta, spread, count, advance
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .lambda: return "Lambda"
+        case .delta:  return "Δ Ziel"
         case .spread: return "Streuung"
         case .count:  return "Anzahl"
         case .advance: return "Zündung"
@@ -27,6 +28,10 @@ enum MapMode: String, CaseIterable, Identifiable {
         case .lambda:
             return [(0.90, RGB(70, 100, 255)), (0.95, RGB(64, 196, 255)), (1.00, RGB(46, 204, 113)),
                     (1.05, RGB(253, 140, 0)), (1.10, RGB(231, 76, 60))]
+        case .delta:
+            // Abweichung vom Ziel: blau zu fett, gruen passt, rot zu mager
+            return [(-0.12, RGB(70, 100, 255)), (-0.06, RGB(64, 196, 255)), (-0.03, RGB(46, 204, 113)),
+                    (0.03, RGB(46, 204, 113)), (0.06, RGB(253, 140, 0)), (0.12, RGB(231, 76, 60))]
         case .spread:
             return [(0.00, RGB(46, 204, 113)), (0.02, RGB(241, 196, 15)), (0.04, RGB(253, 140, 0)),
                     (0.06, RGB(231, 76, 60))]
@@ -85,13 +90,14 @@ struct MapData {
 
     static let sub = 8          // Pixel je Zelle; den Rest glaettet die Skalierung
 
-    init(session: TuningSession, mode: MapMode) {
+    /// `steady`: nur ruhige Fahrt bei warmem Motor
+    init(session: TuningSession, mode: MapMode, steady: Bool = false, targets: MixtureTargets = MixtureTargets()) {
         let rows = TuningSession.rows
         let cols = TuningSession.cols
         var mx = 0
         for r in 0..<rows {
             for c in 0..<cols {
-                mx = max(mx, session.count(row: r, col: c))
+                mx = max(mx, session.count(row: r, col: c, steady: steady))
             }
         }
         let logMax = log(1 + Double(max(1, mx)))
@@ -100,11 +106,16 @@ struct MapData {
             for c in 0..<cols {
                 switch mode {
                 case .lambda:
-                    v[r][c] = session.lambda(row: r, col: c)
+                    v[r][c] = session.lambda(row: r, col: c, steady: steady)
+                case .delta:
+                    if let l = session.lambda(row: r, col: c, steady: steady),
+                       let t = targets.target(Regime.of(row: r, col: c)) {
+                        v[r][c] = l - t
+                    }
                 case .spread:
-                    v[r][c] = session.spread(row: r, col: c)
+                    v[r][c] = session.spread(row: r, col: c, steady: steady)
                 case .count:
-                    let n = session.count(row: r, col: c)
+                    let n = session.count(row: r, col: c, steady: steady)
                     v[r][c] = n > 0 ? log(1 + Double(n)) / logMax : nil
                 case .advance:
                     v[r][c] = session.advance(row: r, col: c)
@@ -199,6 +210,24 @@ struct MapData {
                        space: CGColorSpaceCreateDeviceRGB(),
                        bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
                        provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+    }
+}
+
+/// Merkt sich das fertige Bild. Die Karte wird sonst bei jedem neuen Live-Wert
+/// (10-mal je Sekunde) neu gerechnet, obwohl sich die Messreihe nur 1-mal je Sekunde aendert.
+final class MapCache {
+    private var key = ""
+    private var data: MapData?
+
+    func get(_ session: TuningSession, mode: MapMode, steady: Bool) -> MapData {
+        let t = LiveContext.targets
+        let k = "\(session.id)|\(session.lambdaCount)|\(session.advanceCount)|\(mode.rawValue)|\(steady)"
+            + "|\(t.idle)|\(t.stage1)|\(t.transition)|\(t.stage2)"
+        if k == key, let d = data { return d }
+        let d = MapData(session: session, mode: mode, steady: steady, targets: t)
+        key = k
+        data = d
+        return d
     }
 }
 
@@ -379,6 +408,7 @@ struct ColorScale: View {
     private var labels: (String, String, String) {
         switch mode {
         case .lambda: return ("0.90 fett", "1.00", "mager 1.10")
+        case .delta:  return ("−0.12 zu fett", "Ziel", "zu mager +0.12")
         case .spread: return ("ruhig", "±0.03", "unruhig ±0.06")
         case .count:  return ("wenig", "", maxCount > 0 ? "\(maxCount) Werte" : "viel")
         case .advance: return ("5°", "22°", "40° vor OT")
@@ -394,7 +424,12 @@ struct KennfeldPanel: View {
 
     @AppStorage("mapMode") private var mode: MapMode = .lambda
     @AppStorage("mapShowAdvance") private var showAdvance = false
+    @AppStorage("mapSteady") private var steadyOnly = true
     @State private var selected: MapCell?
+    @State private var cache = MapCache()
+
+    /// Ruhige Fahrt gibt es erst in Messreihen ab Version 2.0
+    private var steady: Bool { steadyOnly && session.steadyCells != nil }
 
     /// Zuendwinkel je Zelle fuer die Zahlen ueber der Karte
     private var advanceGrid: [[Double?]] {
@@ -404,7 +439,7 @@ struct KennfeldPanel: View {
     }
 
     var body: some View {
-        let data = MapData(session: session, mode: mode)
+        let data = cache.get(session, mode: mode, steady: steady)
         Panel {
             VStack(alignment: .leading, spacing: 10) {
                 CardLabel(title: "Lambda-Kennfeld")
@@ -414,6 +449,12 @@ struct KennfeldPanel: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                if session.steadyCells != nil {
+                    Toggle("Nur ruhige Fahrt, Motor warm", isOn: $steadyOnly)
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.fg)
+                        .tint(Theme.accent)
+                }
                 Toggle("Zündwinkel einblenden", isOn: $showAdvance)
                     .font(.system(size: 13))
                     .foregroundColor(Theme.fg)
@@ -458,14 +499,16 @@ struct KennfeldPanel: View {
     }
 
     private func info(_ cell: MapCell, caption: String) -> some View {
-        let n = session.count(row: cell.row, col: cell.col)
-        let lam = session.lambda(row: cell.row, col: cell.col)
-        let sp = session.spread(row: cell.row, col: cell.col)
+        let n = session.count(row: cell.row, col: cell.col, steady: steady)
+        let lam = session.lambda(row: cell.row, col: cell.col, steady: steady)
+        let sp = session.spread(row: cell.row, col: cell.col, steady: steady)
+        let regime = Regime.of(row: cell.row, col: cell.col)
+        let judged = lam.map { MixtureJudge.judge(lambda: $0, regime: regime, targets: LiveContext.targets) }
         let adv = session.advance(row: cell.row, col: cell.col)
         let lo = TuningSession.rowLow(cell.row)
         let place = String(format: "%.0f U/min · %.0f–%.0f kPa", TuningSession.colCenter(cell.col), lo, lo + 10)
         let value = lam.map { String(format: "λ %.3f", $0) } ?? "zu wenige Werte"
-        let valueColor: Color = lam.map { RGB.ramp(MapMode.lambda.stops, $0).color } ?? Theme.muted
+        let valueColor: Color = judged.map { $0.severity.color } ?? Theme.muted
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -487,9 +530,14 @@ struct KennfeldPanel: View {
                         .foregroundColor(Theme.muted)
                 }
             }
+            if let j = judged {
+                Text(regime.title + (j.target.map { String(format: " · Ziel %.2f · ", $0) + j.text } ?? " · ohne Ziel"))
+                    .font(.system(size: 12))
+                    .foregroundColor(j.severity.color)
+            }
             if lam != nil, CarbCircuit.of(row: cell.row, col: cell.col) != nil {
                 NavigationLink {
-                    JetCalcView(sessions: [session], cell: cell)
+                    JetCalcView(sessions: [session], cell: cell, steady: steady)
                 } label: {
                     Label("Düse für diese Stelle berechnen", systemImage: "function")
                         .font(.system(size: 12, weight: .semibold))
@@ -510,10 +558,18 @@ struct KennfeldPanel: View {
         return parts.joined(separator: " · ")
     }
 
+    private var steadyNote: String {
+        steady ? " Gezählt wird nur ruhige Fahrt bei warmem Motor, Gasstöße und Kaltlauf bleiben draußen." : ""
+    }
+
     private var explanation: String {
         switch mode {
         case .lambda:
             return "Mittleres Lambda je Drehzahl und Last, zwischen den Zellen weich gemischt. Das Fadenkreuz ist der aktuelle Betriebspunkt."
+                + steadyNote
+        case .delta:
+            return "Abstand zum Ziel-Lambda des jeweiligen Bereichs: Leerlauf, Teillast, Übergang, Vollgas. Grün passt, blau ist fetter als gewollt, rot magerer. Die Ziele stellst du unter Einstellungen › Gemisch ein. Schiebebetrieb (unterste Zeile) hat kein Ziel."
+                + steadyNote
         case .spread:
             return "Wie stark Lambda in diesem Bereich schwankt. Rot heißt unruhig: Dort springt das Gemisch, zum Beispiel beim Übergang oder beim Gasgeben. Wird erst ab Version 1.2 erfasst, ältere Messreihen bleiben hier dunkel."
         case .count:

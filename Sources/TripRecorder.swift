@@ -147,11 +147,11 @@ final class TripRecorder: ObservableObject {
 
     /// Setzt eine Markierung und startet die Aufnahme, falls sie nicht laeuft. Gibt die Nummer zurueck.
     @discardableResult
-    func addMarker() -> Int {
+    func addMarker(note: String = "") -> Int {
         if !isRecording { start(manual: true) }
         guard var w = work else { return 0 }
         let n = w.markers.count + 1
-        w.markers.append(TripMarker(id: n, time: Date()))
+        w.markers.append(TripMarker(id: n, time: Date(), note: note))
         work = w
         current = w
         pendingMarker = n
@@ -183,10 +183,15 @@ final class TripRecorder: ObservableObject {
         let dt = lastSampleTime.map { min(1, max(0, s.time.timeIntervalSince($0))) } ?? 0
         lastSampleTime = s.time
 
-        if let l = location {
+        // Strecke nur aus neuen GPS-Punkten und nur in Bewegung. Im Stand wandert
+        // die Position um ein paar Meter, das wuerde sich sonst zu Kilometern summieren.
+        if let l = location, l.timestamp != lastLocation?.timestamp {
             if let p = lastLocation {
                 let d = l.distance(from: p)
-                if d < 200 { w.distanceKm += d / 1000 }    // Spruenge bei schlechtem Empfang ignorieren
+                let dt = l.timestamp.timeIntervalSince(p.timestamp)
+                let moving = l.speed >= 1.4 || (l.speed < 0 && d > max(15, l.horizontalAccuracy))
+                // Spruenge bei schlechtem Empfang ignorieren (mehr als 180 km/h)
+                if moving, dt > 0, dt <= 120, d <= 50 * dt { w.distanceKm += d / 1000 }
             }
             lastLocation = l
         }
@@ -303,8 +308,14 @@ final class TripRecorder: ObservableObject {
     // ── intern ───────────────────────────────────────────────────
     private func flush() {
         guard !buffer.isEmpty, let h = handle else { return }
-        h.write(Data(buffer.utf8))
-        buffer = ""
+        do {
+            try h.write(contentsOf: Data(buffer.utf8))
+            buffer = ""
+        } catch {
+            // Speicher voll oder Datei weg: Zeilen behalten und spaeter noch einmal versuchen,
+            // aber nicht unbegrenzt sammeln
+            if buffer.utf8.count > 400_000 { buffer = "" }
+        }
     }
 
     private func saveSummary() {

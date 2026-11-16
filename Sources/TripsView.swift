@@ -6,10 +6,40 @@ import MapKit
 struct TripsView: View {
     @ObservedObject var recorder: TripRecorder
     let tuning: TuningStore
+    @ObservedObject var fuel: FuelStore
+
+    private var fuelSubtitle: String {
+        let r = fuel.results(trips: recorder.trips)
+        if let avg = FuelMath.average(Array(r.values)) {
+            return String(format: "Ø %.1f l/100 km", avg)
+        }
+        return fuel.entries.isEmpty ? "Verbrauch von Volltanken zu Volltanken" : "\(fuel.entries.count) Einträge"
+    }
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    NavigationLink {
+                        FuelView(fuel: fuel, recorder: recorder)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "fuelpump.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(Theme.accent)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Tankbuch")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(Theme.fg)
+                                Text(fuelSubtitle)
+                                    .font(.system(size: 13).monospacedDigit())
+                                    .foregroundColor(Theme.muted)
+                            }
+                        }
+                    }
+                    .listRowBackground(Theme.surface)
+                }
                 if let c = recorder.current {
                     Section("Läuft gerade") {
                         TripListRow(trip: c, live: true)
@@ -75,9 +105,10 @@ struct TripListRow: View {
                     Text("Aufnahme").font(.system(size: 12, weight: .semibold)).foregroundColor(Theme.crit)
                 }
             } else if let l = trip.avgLambda {
+                // Der Schnitt ueber alle Lasten sagt wenig, deshalb ohne Ampelfarbe
                 Text(String(format: "Ø λ %.3f", l))
                     .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                    .foregroundColor(Limits.lambda(l).0.color)
+                    .foregroundColor(Theme.muted)
             }
         }
         .padding(.vertical, 2)
@@ -143,6 +174,39 @@ enum TripMetric: String, CaseIterable, Identifiable {
     }
 }
 
+/// Zeitanteil und mittleres Lambda eines Betriebsbereichs in einer Fahrt
+struct RegimeShare: Identifiable {
+    let regime: Regime
+    var count = 0
+    var sum = 0.0
+    var n = 0
+
+    var id: String { regime.rawValue }
+    var lambda: Double? { n >= 8 ? sum / Double(n) : nil }
+
+    var verdict: (String, Color) {
+        guard let l = lambda else { return ("", Theme.muted) }
+        let j = MixtureJudge.judge(lambda: l, regime: regime, targets: LiveContext.targets)
+        return (j.target == nil ? "" : j.text, j.severity.color)
+    }
+
+    static func of(_ rows: [TripRow]) -> [RegimeShare] {
+        var map: [Regime: RegimeShare] = [:]
+        for r in rows {
+            guard let rpm = r.rpm, rpm >= 500, let kPa = r.map else { continue }
+            let g = Regime.of(rpm: rpm, kPa: kPa)
+            var s = map[g] ?? RegimeShare(regime: g)
+            s.count += 1
+            if let l = r.lambda, l <= 2 {
+                s.sum += l
+                s.n += 1
+            }
+            map[g] = s
+        }
+        return Regime.allCases.compactMap { map[$0] }
+    }
+}
+
 struct TripChartPoint: Identifiable {
     let id: Int
     let t: Double        // Minuten
@@ -185,6 +249,7 @@ struct TripDetailView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     chartPanel(rows)
+                    regimePanel(rows)
                     markerPanel(rows)
                     actionPanel(rows)
                 } else {
@@ -264,6 +329,46 @@ struct TripDetailView: View {
                 } else {
                     TripChart(points: pts, markers: marks, metric: metric)
                         .frame(height: 210)
+                }
+            }
+        }
+    }
+
+    // Gemisch je Betriebsbereich in dieser Fahrt
+    @ViewBuilder
+    private func regimePanel(_ rows: [TripRow]) -> some View {
+        let shares = RegimeShare.of(rows)
+        let total = shares.reduce(0) { $0 + $1.count }
+        if total >= 240 {
+            Panel {
+                VStack(alignment: .leading, spacing: 8) {
+                    CardLabel(title: "Gemisch je Bereich", symbol: "stethoscope")
+                    ForEach(shares) { s in
+                        HStack {
+                            Text(s.regime.title)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(Theme.fg)
+                            Spacer()
+                            Text(String(format: "%.0f %%", Double(s.count) / Double(total) * 100))
+                                .font(.system(size: 12).monospacedDigit())
+                                .foregroundColor(Theme.muted)
+                                .frame(width: 44, alignment: .trailing)
+                            Text(s.lambda.map { String(format: "λ %.2f", $0) } ?? "–")
+                                .font(.system(size: 14, weight: .bold).monospacedDigit())
+                                .foregroundColor(Theme.fg)
+                                .frame(width: 62, alignment: .trailing)
+                            Text(s.verdict.0)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(s.verdict.1)
+                                .frame(width: 84, alignment: .trailing)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                    }
+                    Text("Anteil an der Fahrzeit und mittleres Lambda gegen dein Ziel. Hier zählen alle Werte, auch Gasstöße. Für die genaue Auswertung die Fahrt unten als Messreihe speichern und unter Abstimmung › Check auswählen.")
+                        .font(.system(size: 11))
+                        .foregroundColor(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -378,8 +483,7 @@ struct TripSummaryGrid: View {
                 trip.maxOilT.map { Limits.temperature($0).0.color })
             box("min Öldruck", Format.value(trip.minOilPRunning, "%.1f", "bar"),
                 trip.minOilPRunning.map { Limits.pressure($0).0.color })
-            box("Ø Lambda", Format.value(trip.avgLambda, "%.3f"),
-                trip.avgLambda.map { Limits.lambda($0).0.color })
+            box("Ø Lambda", Format.value(trip.avgLambda, "%.3f"))
         }
     }
 
@@ -410,6 +514,7 @@ struct MarkerRow: View {
     let start: Date
     let onSave: (String) -> Void
     @State private var text: String
+    @FocusState private var focused: Bool
 
     init(marker: TripMarker, row: TripRow?, start: Date, onSave: @escaping (String) -> Void) {
         self.marker = marker
@@ -458,7 +563,15 @@ struct MarkerRow: View {
                 .padding(.vertical, 8)
                 .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .submitLabel(.done)
+                .focused($focused)
                 .onSubmit { onSave(text) }
+                // auch speichern, wenn man einfach woandershin tippt oder die Seite verlaesst
+                .onChange(of: focused) { f in
+                    if !f, text != marker.note { onSave(text) }
+                }
+                .onDisappear {
+                    if text != marker.note { onSave(text) }
+                }
         }
         .padding(.vertical, 4)
     }

@@ -26,6 +26,17 @@ jobs:
           swiftc -swift-version 5 "$RUNNER_TEMP/t123/main.swift" -o "$RUNNER_TEMP/t123/check"
           "$RUNNER_TEMP/t123/check"
 
+      - name: Rechenkern pruefen
+        run: |
+          mkdir -p "$RUNNER_TEMP/core"
+          cp Tests/CoreCheck.swift "$RUNNER_TEMP/core/main.swift"
+          swiftc -swift-version 5 \
+            Sources/Samples.swift Sources/Mixture.swift Sources/TuningSession.swift \
+            Sources/MixtureDiagnosis.swift Sources/TipInDetector.swift Sources/PullDetector.swift \
+            Sources/AlertMonitor.swift Sources/CarbSetup.swift Sources/LinkDiagnostics.swift \
+            Sources/Tune123.swift "$RUNNER_TEMP/core/main.swift" -o "$RUNNER_TEMP/core/check"
+          "$RUNNER_TEMP/core/check"
+
       - name: App bauen
         env:
           BUILD_NUMBER: ${{ github.run_number }}

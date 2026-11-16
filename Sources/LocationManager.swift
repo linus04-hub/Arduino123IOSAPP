@@ -30,6 +30,13 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
+    /// Kommt kein neuer GPS-Punkt mehr (Tunnel, Empfang weg), das alte Tempo nicht stehen lassen.
+    /// Wird 4-mal je Sekunde vom AppModel aufgerufen.
+    func expireIfStale(now: Date = Date()) {
+        guard speedKmh != nil, let l = location, now.timeIntervalSince(l.timestamp) > 4 else { return }
+        speedKmh = nil
+    }
+
     /// Letzte Position, wenn sie frisch und genau genug ist
     var freshLocation: CLLocation? {
         guard let l = location, Date().timeIntervalSince(l.timestamp) < 5 else { return nil }
@@ -64,7 +71,9 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let l = locations.last, l.horizontalAccuracy >= 0, l.horizontalAccuracy < 50 else { return }
         location = l
-        speedKmh = l.speed >= 0 ? l.speed * 3.6 : nil
+        // unter 2 km/h ist es GPS-Rauschen im Stand
+        let kmh = l.speed >= 0 ? l.speed * 3.6 : nil
+        speedKmh = kmh.map { $0 < 2 ? 0 : $0 }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

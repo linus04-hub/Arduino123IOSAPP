@@ -8,28 +8,6 @@ import Charts
 // Drehzahl. Jede Stellung landet in einer Tabelle; markiert wird die
 // Stellung mit der hoechsten Drehzahl bei ruhigem Lambda.
 
-/// Mittelwert und Streuung eines Werts in einem Zeitfenster des Verlaufs
-struct WindowStat {
-    let mean: Double
-    let spread: Double
-    let count: Int
-}
-
-enum SampleWindow {
-    static func stat(_ samples: [Sample], from: Date, to: Date, _ value: (Sample) -> Double?) -> WindowStat? {
-        var vals: [Double] = []
-        for s in samples where s.time >= from && s.time <= to {
-            if let v = value(s) { vals.append(v) }
-        }
-        guard vals.count >= 4 else { return nil }
-        let n = Double(vals.count)
-        let m = vals.reduce(0, +) / n
-        var sq = 0.0
-        for v in vals { sq += (v - m) * (v - m) }
-        return WindowStat(mean: m, spread: (sq / n).squareRoot(), count: vals.count)
-    }
-}
-
 struct IdleStep: Codable, Identifiable, Hashable {
     var id = UUID()
     var turns: Double            // Umdrehungen ab Start, + = herausgedreht
@@ -209,7 +187,10 @@ struct IdleAssistantView: View {
 
     // ── Live: Mittel der letzten 10 s ──
     private func liveCard(lam: WindowStat?, rpm: WindowStat?) -> some View {
-        let lamLevel: Level = lam.map { Limits.lambda($0.mean).0 } ?? .off
+        // gegen das Ziel-Lambda fuer den Leerlauf, nicht gegen 1.00
+        let lamLevel: Level = lam.map {
+            MixtureJudge.judge(lambda: $0.mean, regime: .idle, targets: LiveContext.targets).severity.level
+        } ?? .off
         let calm = lam.map { calmText($0.spread) } ?? ""
         return Panel {
             VStack(alignment: .leading, spacing: 10) {
@@ -241,6 +222,9 @@ struct IdleAssistantView: View {
                         .font(.system(size: 12).monospacedDigit())
                         .foregroundColor(Theme.muted)
                 }
+                Text(String(format: "Ziel: Lambda %.2f bei etwa %.0f U/min", LiveContext.targets.idle, LiveContext.idleTargetRPM))
+                    .font(.system(size: 12).monospacedDigit())
+                    .foregroundColor(Theme.muted)
                 if let hint = hint(rpm: rpm, lam: lam) {
                     Text(hint)
                         .font(.system(size: 12, weight: .semibold))
@@ -274,6 +258,9 @@ struct IdleAssistantView: View {
         if rpm == nil && lam == nil { return "Keine Werte. Anzeige und 123 müssen verbunden sein." }
         if rpm == nil { return "Keine Drehzahl. Ist die 123 verbunden?" }
         if let r = rpm, r.mean > 1400 { return "Drehzahl zu hoch für Leerlauf. Gas ganz loslassen." }
+        if let r = rpm, r.mean > LiveContext.idleTargetRPM + 150 {
+            return String(format: "Leerlauf über dem Soll von %.0f U/min. Erst an der Anschlagschraube senken: Sonst steht die Drosselklappe über den Übergangsbohrungen und die Gemischschraube wirkt kaum.", LiveContext.idleTargetRPM)
+        }
         if let t = ble.shown?.temp, t >= 0, t < 60 { return "Öl noch unter 60 °C. Für saubere Werte erst warm fahren." }
         return nil
     }
@@ -438,7 +425,9 @@ struct IdleAssistantView: View {
             }
             .frame(width: 64, alignment: .leading)
             Text(s.lambda.map { String(format: "%.3f", $0) } ?? "–")
-                .foregroundColor(s.lambda.map { Limits.lambda($0).0.color } ?? Theme.muted)
+                .foregroundColor(s.lambda.map {
+                    MixtureJudge.judge(lambda: $0, regime: .idle, targets: LiveContext.targets).severity.color
+                } ?? Theme.muted)
                 .frame(maxWidth: .infinity, alignment: .trailing)
             Text(s.rpm.map { String(format: "%.0f", $0) } ?? "–")
                 .frame(maxWidth: .infinity, alignment: .trailing)

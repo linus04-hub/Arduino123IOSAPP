@@ -113,22 +113,18 @@ struct StatusText: View {
 // ── Lambda mit Fett/Mager-Skala 0.85..1.15 ───────────────────────
 struct LambdaCard: View {
     let value: Double?
-
-    private var judged: (Level, String) {
-        guard let v = value else { return (.off, "keine Daten") }
-        return Limits.lambda(v)
-    }
+    let look: LambdaLook         // Bewertung, mit der 123 gegen das Ziel des Betriebsbereichs
 
     var body: some View {
-        Card(level: judged.0) {
+        Card(level: look.level) {
             VStack(alignment: .leading, spacing: 2) {
                 CardLabel(title: "Lambda", glyph: "λ")
                 // 4.5 = Sonde nicht bereit -> Platzhalter statt Zahl
                 BigValue(value: value.flatMap { $0 <= 2 ? $0 : nil },
                          format: "%.3f", placeholder: "-.---",
-                         level: judged.0, size: 56)
-                StatusText(text: judged.1)
-                LambdaScale(lambda: value).padding(.top, 10)
+                         level: look.level, size: 56)
+                StatusText(text: look.text)
+                LambdaScale(lambda: value, target: look.target).padding(.top, 10)
             }
         }
     }
@@ -136,12 +132,23 @@ struct LambdaCard: View {
 
 struct LambdaScale: View {
     let lambda: Double?
+    var target: Double? = nil    // Ziel des aktuellen Betriebsbereichs; nil = feste Zonen um 1.00
     var showLabels = true
 
-    // Zonen wie im Display: 0.94 / 0.98 / 1.02 / 1.06 auf 0.85..1.15
-    private var zones: [(Color, CGFloat)] { [
-        (Theme.crit, 0.30), (Theme.warn, 0.1333), (Theme.ok, 0.1334), (Theme.warn, 0.1333), (Theme.crit, 0.30)
-    ] }
+    static let lo = 0.85
+    static let span = 0.30
+
+    /// Breite des gruenen und des gelben Bereichs um die Mitte. Ohne Ziel wie im
+    /// Display: 0.94 / 0.98 / 1.02 / 1.06. Mit Ziel wandert das Fenster mit.
+    private var zones: [(Color, CGFloat)] {
+        let c = target ?? 1.0
+        let ok = target == nil ? 0.02 : 0.04
+        let warn = target == nil ? 0.06 : 0.09
+        func pos(_ v: Double) -> CGFloat { CGFloat(min(1, max(0, (v - Self.lo) / Self.span))) }
+        let edges = [0, pos(c - warn), pos(c - ok), pos(c + ok), pos(c + warn), 1]
+        let colors = [Theme.crit, Theme.warn, Theme.ok, Theme.warn, Theme.crit]
+        return (0..<5).map { (colors[$0], max(0, edges[$0 + 1] - edges[$0])) }
+    }
 
     var body: some View {
         VStack(spacing: 5) {
@@ -157,6 +164,7 @@ struct LambdaScale: View {
                     }
                     .frame(height: 10)
                     .clipShape(RoundedRectangle(cornerRadius: 3))
+                    .animation(.easeInOut(duration: 0.5), value: target)
 
                     if let l = lambda, l <= 2 {
                         let t = min(1, max(0, (l - 0.85) / 0.30))
@@ -177,7 +185,7 @@ struct LambdaScale: View {
             if showLabels {
                 ZStack {
                     Text("fett 0.85").frame(maxWidth: .infinity, alignment: .leading)
-                    Text("1.00")
+                    Text(target.map { String(format: "Ziel %.2f", $0) } ?? "1.00")
                     Text("1.15 mager").frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .font(.system(size: 11).monospacedDigit())
@@ -309,10 +317,19 @@ struct TrendGraph: View {
             left + w * CGFloat(1 - now.timeIntervalSince(t) / window)
         }
 
-        // Lambda: Zielbereich 0.98..1.02 hinterlegen
+        // Lambda: Zielbereich hinterlegen. Mit der 123 der des aktuellen Betriebsbereichs.
         if metric == .lambda {
-            let band = CGRect(x: left, y: y(1.02, .lambda), width: w, height: y(0.98, .lambda) - y(1.02, .lambda))
+            var lo = 0.98, hi = 1.02
+            if LiveContext.byTarget, let s = samples.last, let r = s.rpm, r >= 300, let k = s.mapKPa,
+               let t = LiveContext.targets.target(rpm: r, kPa: k) {
+                lo = t - 0.04
+                hi = t + 0.04
+            }
+            let band = CGRect(x: left, y: y(hi, .lambda), width: w, height: y(lo, .lambda) - y(hi, .lambda))
             ctx.fill(Path(band), with: .color(Theme.ok.opacity(0.08)))
+        }
+        func tint(_ v: Double, _ s: Sample) -> Color {
+            metric == .lambda ? LiveJudge.lambdaColor(v, rpm: s.rpm, kPa: s.mapKPa) : metric.lineColor(v)
         }
         // Raster mit Beschriftung, Lambda 1.0 gestrichelt
         for g in metric.gridLines {
@@ -353,13 +370,13 @@ struct TrendGraph: View {
             var p = Path()
             p.move(to: CGPoint(x: x(samples[i - 1].time), y: y(a, metric)))
             p.addLine(to: CGPoint(x: x(samples[i].time), y: y(b, metric)))
-            plot.stroke(p, with: .color(metric.lineColor(b)),
+            plot.stroke(p, with: .color(tint(b, samples[i])),
                         style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
         }
         if let last = samples.last, let v = metric.value(in: last) {
             let c = CGPoint(x: x(last.time), y: y(v, metric))
             plot.fill(Path(ellipseIn: CGRect(x: c.x - 3.5, y: c.y - 3.5, width: 7, height: 7)),
-                      with: .color(metric.lineColor(v)))
+                      with: .color(tint(v, last)))
         }
     }
 }
@@ -716,7 +733,8 @@ struct ScatterPlot: View {
 
         // Punkte
         for p in points {
-            let col = byLoad ? Self.loadColor(p.mapKPa) : Limits.lambda(p.lambda).0.color
+            let col = byLoad ? Self.loadColor(p.mapKPa)
+                : LiveJudge.lambdaColor(p.lambda, rpm: p.rpm, kPa: p.mapKPa)
             ctx.fill(Path(ellipseIn: CGRect(x: x(p.rpm) - 2.5, y: y(p.lambda) - 2.5, width: 5, height: 5)),
                      with: .color(col.opacity(0.5)))
         }

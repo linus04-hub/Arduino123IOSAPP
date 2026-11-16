@@ -1,47 +1,14 @@
 import SwiftUI
 
-// ── Gasstoss-Analyse: wie reagiert Lambda beim Gasgeben? ─────────
-// Ohne Drosselklappen-Sensor wird ein Gasstoss so erkannt: Lambda war
-// vorher ruhig, schlaegt dann schnell um mindestens 0,05 aus, und die
-// Drehzahl steigt in den folgenden 3 s um mindestens 120 U/min. Faellt
-// die Drehzahl dagegen (Schiebebetrieb), wird der Ausschlag verworfen.
-// Ausgewertet wird der 4-Hz-Verlauf; sehr kurze Spitzen koennen fehlen.
-
-struct TipInEvent: Codable, Identifiable, Hashable {
-    var id = UUID()
-    var time: Date
-    var baseLambda: Double       // Mittel vor dem Gasstoss
-    var peakLambda: Double       // magerster Wert danach
-    var minLambda: Double        // fettester Wert danach
-    var leanSeconds: Double      // Zeit ueber Basis + 0,03
-    var rpmBefore: Double
-    var rpmAfter: Double
-    var trace: [Float]           // Lambda alle 0,25 s, ab 1 s vor dem Ausschlag
-
-    var leanSpike: Double { peakLambda - baseLambda }
-    var richDip: Double { baseLambda - minLambda }
-
-    enum Verdict { case lean, rich, ok }
-
-    var verdict: Verdict {
-        if leanSpike >= 0.08 { return .lean }
-        if richDip >= 0.10 && leanSpike < 0.04 { return .rich }
-        return .ok
-    }
-}
+// ── Gasstoss-Analyse: Ablage und Ansicht ─────────────────────────
+// Die Erkennung selbst steht in TipInDetector.swift.
 
 final class TipInAnalyzer: ObservableObject {
     @Published private(set) var events: [TipInEvent] = []    // neueste zuerst
 
     static let maxEvents = 100
-    static let triggerDelta = 0.05
-    static let minRPMRise = 120.0
 
-    private var buffer: [Sample] = []
-    private var triggerAt: Date?
-    private var base = 0.0
-    private var rpmBefore = 0.0
-    private var cooldownUntil = Date.distantPast
+    private var detector = TipInDetector()
 
     private static var url: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -55,32 +22,10 @@ final class TipInAnalyzer: ObservableObject {
 
     /// Alle 0,25 s aus dem AppModel (Demo-Werte kommen hier nicht an)
     func add(_ s: Sample) {
-        buffer.append(s)
-        let cut = s.time.addingTimeInterval(-8)
-        if let i = buffer.firstIndex(where: { $0.time >= cut }), i > 0 {
-            buffer.removeFirst(i)
-        }
-
-        if let t = triggerAt {
-            if s.time.timeIntervalSince(t) >= 3 {
-                finish(at: t)
-                triggerAt = nil
-                cooldownUntil = s.time.addingTimeInterval(2)
-            }
-            return
-        }
-
-        guard s.time >= cooldownUntil, let l = s.lambda, let rpm = s.rpm, rpm >= 900 else { return }
-        let from = s.time.addingTimeInterval(-2.0)
-        let to = s.time.addingTimeInterval(-0.5)
-        guard let b = SampleWindow.stat(buffer, from: from, to: to, { $0.lambda }),
-              b.count >= 5, b.spread < 0.02,
-              let r = SampleWindow.stat(buffer, from: from, to: to, { $0.rpm }) else { return }
-        if abs(l - b.mean) >= Self.triggerDelta {
-            triggerAt = s.time
-            base = b.mean
-            rpmBefore = r.mean
-        }
+        guard let e = detector.add(s) else { return }
+        events.insert(e, at: 0)
+        if events.count > Self.maxEvents { events.removeLast(events.count - Self.maxEvents) }
+        save()
     }
 
     func clear() {
@@ -88,58 +33,7 @@ final class TipInAnalyzer: ObservableObject {
         save()
     }
 
-    private func finish(at t: Date) {
-        let end = t.addingTimeInterval(3)
-        let after = buffer.filter { $0.time >= t && $0.time <= end }
-        let rpms = after.filter { $0.time >= t.addingTimeInterval(0.75) }.compactMap { $0.rpm }
-        // Nur echte Gasstoesse: Drehzahl muss danach steigen
-        guard let rpmAfter = rpms.max(), rpmAfter - rpmBefore >= Self.minRPMRise else { return }
-        let lams = after.compactMap { $0.lambda }
-        guard let peak = lams.max(), let low = lams.min() else { return }
-
-        var leanCount = 0
-        for x in after {
-            if let v = x.lambda, v > base + 0.03 { leanCount += 1 }
-        }
-        let b = base
-        let trace: [Float] = buffer
-            .filter { $0.time >= t.addingTimeInterval(-1) && $0.time <= end }
-            .map { Float($0.lambda ?? b) }
-
-        let e = TipInEvent(time: t, baseLambda: b, peakLambda: max(peak, b), minLambda: min(low, b),
-                           leanSeconds: Double(leanCount) * BLEManager.graphStep,
-                           rpmBefore: rpmBefore, rpmAfter: rpmAfter, trace: trace)
-        events.insert(e, at: 0)
-        if events.count > Self.maxEvents { events.removeLast(events.count - Self.maxEvents) }
-        save()
-    }
-
-    // ── Zusammenfassung ──
-    struct Summary {
-        let count: Int
-        let avgLeanSpike: Double
-        let lean: Int
-        let rich: Int
-        let ok: Int
-    }
-
-    var summary: Summary? {
-        guard !events.isEmpty else { return nil }
-        var lean = 0
-        var rich = 0
-        var ok = 0
-        var spikes = 0.0
-        for e in events {
-            spikes += e.leanSpike
-            switch e.verdict {
-            case .lean: lean += 1
-            case .rich: rich += 1
-            case .ok:   ok += 1
-            }
-        }
-        return Summary(count: events.count, avgLeanSpike: spikes / Double(events.count),
-                       lean: lean, rich: rich, ok: ok)
-    }
+    var summary: TipInSummary? { events.summary }
 
     private func save() {
         guard let d = try? JSONEncoder().encode(events) else { return }
@@ -223,7 +117,7 @@ struct TipInView: View {
             .background(color.opacity(0.15), in: Capsule())
     }
 
-    private func verdictText(_ s: TipInAnalyzer.Summary) -> String {
+    private func verdictText(_ s: TipInSummary) -> String {
         let n = Double(s.count)
         if s.count < 5 {
             return "Erst \(s.count) Gasstöße erkannt. Ab etwa fünf ist das Bild belastbar."
@@ -239,7 +133,7 @@ struct TipInView: View {
 
     private var infoCard: some View {
         Panel {
-            Text("Erkannt wird ein Gasstoß, wenn Lambda nach ruhiger Fahrt schnell um mindestens 0,05 ausschlägt und die Drehzahl danach steigt. Ohne Drosselklappen-Sensor ist das eine Schätzung, einzelne Fehlerkennungen sind möglich. Lambda wird 4-mal pro Sekunde ausgewertet, sehr kurze Spitzen können fehlen. Demo-Werte werden nicht erfasst.")
+            Text("Mit der 123 zählt als Gasstoß, wenn der Saugrohrdruck aus ruhiger Fahrt um mindestens 15 kPa springt und oben bleibt. So werden auch die sauberen erfasst. Ohne Saugrohrdruck erkennt die App nur Gasstöße, bei denen Lambda sichtbar ausschlägt. Mager heißt: Lambda steigt kurz um mindestens 0.08. Dass es danach fetter wird, ist bei Vollgas gewollt und zählt erst unter Lambda 0.80 als zu fett. Lambda wird 4-mal pro Sekunde ausgewertet, sehr kurze Spitzen können fehlen. Demo-Werte werden nicht erfasst.")
                 .font(.system(size: 11))
                 .foregroundColor(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -277,7 +171,8 @@ struct TipInRow: View {
                     .frame(height: 70)
                 Text(String(format: "λ %.3f → mager %.3f (+%.3f), fett %.3f · %.2f s mager · %.0f → %.0f U/min",
                             event.baseLambda, event.peakLambda, event.leanSpike, event.minLambda,
-                            event.leanSeconds, event.rpmBefore, event.rpmAfter))
+                            event.leanSeconds, event.rpmBefore, event.rpmAfter)
+                     + (event.mapAfter.map { String(format: " · %.0f → %.0f kPa", event.mapBefore ?? 0, $0) } ?? ""))
                     .font(.system(size: 11).monospacedDigit())
                     .foregroundColor(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)

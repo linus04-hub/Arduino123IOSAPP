@@ -23,15 +23,15 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            LiveView(ble: model.ble, recorder: model.recorder, location: model.location)
+            LiveView(ble: model.ble, recorder: model.recorder, location: model.location, alerts: model.alerts)
                 .tabBarStyle()
                 .tabItem { Label("Live", systemImage: "speedometer") }
                 .tag(0)
-            TripsView(recorder: model.recorder, tuning: model.tuning)
+            TripsView(recorder: model.recorder, tuning: model.tuning, fuel: model.fuel)
                 .tabBarStyle()
                 .tabItem { Label("Fahrten", systemImage: "car.fill") }
                 .tag(1)
-            TuningView(tuning: model.tuning, ble: model.ble, idle: model.idle, tipIns: model.tipIns)
+            TuningView(model: model, tuning: model.tuning)
                 .tabBarStyle()
                 .tabItem { Label("Abstimmung", systemImage: "chart.xyaxis.line") }
                 .tag(2)

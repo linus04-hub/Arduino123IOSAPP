@@ -5,6 +5,7 @@ struct LiveView: View {
     @ObservedObject var ble: BLEManager
     let recorder: TripRecorder          // beobachtet die Leiste selbst
     let location: LocationManager
+    let alerts: AlertCenter             // beobachtet AlertArea selbst
     @AppStorage("layout") private var layout: AppLayout = .standard
 
     var body: some View {
@@ -16,6 +17,8 @@ struct LiveView: View {
             ScrollView {
                 VStack(spacing: 10) {
                     header
+
+                    AlertArea(alerts: alerts)
 
                     if let w = ble.warning {
                         WarningBanner(text: w)
