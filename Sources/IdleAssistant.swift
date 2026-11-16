@@ -8,28 +8,6 @@ import Charts
 // Drehzahl. Jede Stellung landet in einer Tabelle; markiert wird die
 // Stellung mit der hoechsten Drehzahl bei ruhigem Lambda.
 
-/// Mittelwert und Streuung eines Werts in einem Zeitfenster des Verlaufs
-struct WindowStat {
-    let mean: Double
-    let spread: Double
-    let count: Int
-}
-
-enum SampleWindow {
-    static func stat(_ samples: [Sample], from: Date, to: Date, _ value: (Sample) -> Double?) -> WindowStat? {
-        var vals: [Double] = []
-        for s in samples where s.time >= from && s.time <= to {
-            if let v = value(s) { vals.append(v) }
-        }
-        guard vals.count >= 4 else { return nil }
-        let n = Double(vals.count)
-        let m = vals.reduce(0, +) / n
-        var sq = 0.0
-        for v in vals { sq += (v - m) * (v - m) }
-        return WindowStat(mean: m, spread: (sq / n).squareRoot(), count: vals.count)
-    }
-}
-
 struct IdleStep: Codable, Identifiable, Hashable {
     var id = UUID()
     var turns: Double            // Umdrehungen ab Start, + = herausgedreht

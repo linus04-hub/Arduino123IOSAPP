@@ -68,6 +68,37 @@ enum Tune123 {
     /// Block 1, Byte 6–9: Pincode. Wird nie weitergegeben.
     static let pinBytes          = 6...9
 
+    /// Fuer das Diagnose-Protokoll: zeigt nur den Aufbau empfangener Daten,
+    /// nie deren Inhalt. Jede Ziffer und jeder Buchstabe wird ersetzt, damit
+    /// der Pincode (Block 1) auch bei unbekanntem Format nicht lesbar ist.
+    static func mask(_ bytes: [UInt8]) -> String {
+        var out = ""
+        for c in bytes {
+            switch c {
+            case 0x30...0x39, 0x41...0x46: out += "h"     // Hex-Ziffer
+            case 0x47...0x5A, 0x61...0x7A: out += "a"     // anderer Buchstabe
+            case 0x20:                     out += "_"
+            case 0x0D:                     out += "¶"
+            case 0x21...0x7E:              out += String(UnicodeScalar(c))
+            default:                       out += "·"
+            }
+        }
+        return out
+    }
+
+    static func typeName(_ type: UInt8) -> String {
+        switch type {
+        case 0x30: return "Drehzahl"
+        case 0x31: return "Zündwinkel"
+        case 0x32: return "Saugrohrdruck"
+        case 0x33: return "Modultemperatur"
+        case 0x34: return "Tuning-Modus"
+        case 0x35: return "Spulenstrom"
+        case 0x41: return "Bordspannung"
+        default:   return "unbekannt"
+        }
+    }
+
     /// Ohne Drehung schickt die 123 einen Platzhalter (0xBE → 9500), zum
     /// Beispiel direkt nach dem Verbinden. Alles darueber gilt als Stillstand.
     static let maxPlausibleRPM: Double = 9000
@@ -90,10 +121,26 @@ enum Tune123Frame: Equatable {
 
 /// Zerlegt den Byte-Strom. Frames koennen auf mehrere Notifications verteilt
 /// oder zu mehreren in einer stecken; Muell dazwischen wird uebersprungen.
+/// Zaehler fuer die Diagnose-Seite. Rohwerte nur von Live-Frames, nie von Speicherbloecken.
+struct Tune123Stats: Equatable {
+    var bytes = 0                    // empfangen
+    var skipped = 0                  // uebersprungen: Echo der eigenen Befehle, Uebertragungsfehler
+    var frames: [UInt8: Int] = [:]   // Anzahl je Frame-Typ (ASCII-Zeichen)
+    var raw: [UInt8: UInt8] = [:]    // letztes Datenbyte je Typ
+    var blocks = 0                   // gelesene Speicherbloecke
+    var versions = 0
+
+    var total: Int { frames.values.reduce(0, +) }
+}
+
 struct Tune123Parser {
     private var buffer: [UInt8] = []
+    private(set) var stats = Tune123Stats()
 
+    /// Puffer leeren (neue Verbindung). Die Zaehler laufen weiter, siehe resetStats.
     mutating func reset() { buffer.removeAll() }
+
+    mutating func resetStats() { stats = Tune123Stats() }
 
     enum Match { case found(Tune123Frame, Int), partial, none }
 
@@ -102,7 +149,11 @@ struct Tune123Parser {
 
     mutating func feed(_ data: Data) -> [Tune123Frame] {
         buffer.append(contentsOf: data)
-        if buffer.count > Self.maxBuffer { buffer.removeFirst(buffer.count - Self.maxBuffer) }
+        stats.bytes += data.count
+        if buffer.count > Self.maxBuffer {
+            stats.skipped += buffer.count - Self.maxBuffer
+            buffer.removeFirst(buffer.count - Self.maxBuffer)
+        }
         var frames: [Tune123Frame] = []
         var i = 0
         scan: while i < buffer.count {
@@ -110,6 +161,7 @@ struct Tune123Parser {
                 switch match(buffer, i) {
                 case .found(let f, let len):
                     frames.append(f)
+                    if case .block = f { stats.blocks += 1 } else { stats.versions += 1 }
                     i += len
                     continue scan
                 case .partial:
@@ -121,8 +173,14 @@ struct Tune123Parser {
             guard buffer.count - i >= 5 else { break }
             if let f = Self.decode(buffer[i], buffer[i + 1], buffer[i + 2], buffer[i + 3], buffer[i + 4]) {
                 frames.append(f)
+                let type = buffer[i]
+                stats.frames[type, default: 0] += 1
+                if let h = Self.hexValue(buffer[i + 1]), let l = Self.hexValue(buffer[i + 2]) {
+                    stats.raw[type] = UInt8(h * 16 + l)
+                }
                 i += 5
             } else {
+                stats.skipped += 1
                 i += 1
             }
         }
@@ -208,7 +266,10 @@ struct Tune123Parser {
         case 0x35: return .coilCurrent(v * 1.85 / 16)
         case 0x41: return .voltage(v * 14.1 / 64)
         case 0x42: return .other(type)
-        default:   return nil
+        default:
+            // Unbekannter Typ mit gueltiger Pruefsumme (andere Firmware?): fuer die Diagnose zaehlen
+            let alnum = (0x30...0x39).contains(type) || (0x41...0x5A).contains(type)
+            return alnum ? .other(type) : nil
         }
     }
 
