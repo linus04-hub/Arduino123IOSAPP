@@ -6,9 +6,9 @@
 # Wieder entfernen:
 #   bash <(curl -fsSL https://raw.githubusercontent.com/linus04-hub/Arduino123IOSAPP/main/Tools/auto-setup.sh) --entfernen
 #
-# Voraussetzungen: Xcode mit deiner Apple-ID angemeldet, die App einmal aus
-# Xcode aufs iPhone gespielt, und in Xcode unter Window › Devices and Simulators
-# beim iPhone „Connect via network“ angehakt.
+# Voraussetzungen: Xcode mit deiner Apple-ID angemeldet und die App einmal per
+# Kabel aus Xcode aufs iPhone gespielt. Danach geht es auch übers WLAN.
+# Richtet zugleich die Mac-App „Citroën Analyse“ und den Datenabgleich ein.
 
 set -uo pipefail
 

@@ -115,6 +115,47 @@ Für die Fehlersuche an Sensoren und Verbindungen:
 - Werte laufen mit Bildschirmrate (bis 120 Hz) weich mit.
 - „Demo-Werte zeigen“ zum Testen ohne Hardware. Demo-Werte werden nicht aufgezeichnet.
 
+## Mac-App „Citroën Analyse“
+
+Wertet die Daten der iPhone-App am Mac aus, viel ausführlicher als auf dem Handy.
+Sie liest nur. Auf dem iPhone und an der 123 ändert sie nichts.
+
+| Seite | Inhalt |
+|---|---|
+| **Übersicht** | Kennzahlen, Gemisch der letzten 30 Tage, Auffälligkeiten, Lambda je Bereich über die Zeit mit den Logbuch-Einträgen. |
+| **Fahrten** | Alle Kanäle untereinander auf einer Zeitachse. Maus zeigt alle Werte an der Stelle, Ziehen markiert einen Abschnitt (min/Ø/max, CSV, Gemisch-Check nur für den Abschnitt), Doppelklick zeigt wieder alles. Dazu Karte nach Gemisch gefärbt, Gemisch je Bereich, Züge, Gasstöße, Warnungen, Gemisch-Check. |
+| **Gesamtauswertung** | Alle Fahrten eines Zeitraums als eine Messreihe (Standard: seit der letzten Änderung): Gemisch-Check, Kennfeld, Maßnahmen der Reihe nach, Verteilung, Lambda über Drehzahl, Motorzustand (Öldruck und -temperatur warm, Bordnetz, Warmlauf). |
+| **Messreihen** | Die auf dem iPhone gespeicherten Messreihen. |
+| **Vergleich** | A gegen B: vor und nach einem Logbuch-Eintrag, zwei Zeiträume oder zwei Messreihen. Tabelle, Kurven, Kennfeld „B minus A“. |
+| **Züge unter Last** | Leistung über die Zeit, Lambda und Leistung über Drehzahl, Tabelle (⌘-Klick für mehrere). Über 40 kW gilt als Messfehler. |
+| **Gasstöße** | Ausschlag über die Zeit, die letzten 20 übereinander, Liste. |
+| **Logbuch** | Je Eintrag die Bedüsung und was die Änderung gebracht hat: Fahrten vorher gegen nachher. |
+| **Tankbuch** | Verbrauch je Tankfüllung. |
+
+**Installieren:** Die Automatik (unten) baut die Mac-App mit und legt sie nach
+`~/Applications/Citroën Analyse`. Ist die Automatik schon eingerichtet, kommt sie beim
+nächsten stündlichen Lauf von selbst. Sofort: den Setup-Befehl noch einmal ausführen.
+Oder in Xcode oben das Schema **CitroenMac** und als Ziel **My Mac** wählen, dann ▶.
+
+**Daten:** Der Mac holt sie jede Stunde übers WLAN vom iPhone, nur Neues
+(`~/Library/Application Support/CitroenAnzeige/iPhone`, Protokoll `~/.citroen-auto/sync.log`).
+Sofort: **Vom iPhone holen** (⇧⌘R). Geteilte CSV-Fahrten lassen sich ins Fenster ziehen
+oder über **Importieren** (⌘I) öffnen. Weitere Ordner unter Einstellungen › Daten.
+Zum Ausprobieren: Einstellungen › Daten › „Beispieldaten statt eigener Daten zeigen“.
+
+## Automatisch über den Mac
+
+Einmal im Terminal (Xcode mit Apple-ID angemeldet, App einmal per Kabel aus Xcode aufs iPhone gespielt):
+
+```
+bash <(curl -fsSL https://raw.githubusercontent.com/linus04-hub/Arduino123IOSAPP/main/Tools/auto-setup.sh)
+```
+
+Danach prüft der Mac jede Stunde: neue Version auf `main` → bauen und aufs iPhone spielen,
+Signatur läuft in 36 h ab → neu signieren, dazu Mac-App bauen und Daten holen. Klappt
+übers WLAN und mit gesperrtem iPhone. Protokoll: `~/.citroen-auto/auto.log`.
+Entfernen: denselben Befehl mit `--entfernen` am Ende.
+
 ## Installieren und Updates über AltStore
 
 Jeder Build auf dem Hauptzweig veröffentlicht ein Release mit der .ipa und einer
