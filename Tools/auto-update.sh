@@ -34,7 +34,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S')  $*" | tee -a "$LOG"; }
 notify() { osascript -e "display notification \"$1\" with title \"Citroën\"" >/dev/null 2>&1 || true; }
 sync_data() {
-    [ -f "$BASE/sync-data.sh" ] || return 0
+    [ -f "$BASE/sync-data.sh" ] || cp "$REPO/Tools/sync-data.sh" "$BASE/sync-data.sh" 2>/dev/null || return 0
     bash "$BASE/sync-data.sh" >/dev/null 2>&1 || true
 }
 fail() {

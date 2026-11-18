@@ -12,6 +12,7 @@ struct HeatmapView: View {
     let digits: Int
     var signed = false
     var counts: [[Int]]? = nil
+    var emptyDim = 0.45                  // Zellen ohne Werte abdunkeln
     var labels: [[String?]]? = nil        // statt der Zahlen aus `values`
     var tooltip: ((Int, Int) -> [String])? = nil
     var showRegimes = true
@@ -76,7 +77,7 @@ struct HeatmapView: View {
             for c in 0..<cols where values[r][c] == nil {
                 let rect = CGRect(x: plot.minX + CGFloat(c) * cw, y: plot.minY + CGFloat(rows - 1 - r) * ch,
                                   width: cw, height: ch)
-                ctx.fill(Path(rect), with: .color(Color.black.opacity(image == nil ? 0 : 0.45)))
+                ctx.fill(Path(rect), with: .color(Color.black.opacity(image == nil ? 0 : emptyDim)))
             }
         }
         // Gitter

@@ -76,7 +76,7 @@ struct LogEntryDetail: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
-                    .frame(width: 430)
+                    .fixedSize(horizontal: true, vertical: false)
                     if let fx = effect { EffectCard(effect: fx) }
                 }
                 Card(title: "Lambda je Bereich über die Zeit", symbol: "chart.xyaxis.line") {
@@ -108,31 +108,9 @@ struct EffectCard: View {
             } else {
                 Text("\(fx.beforeTrips) Fahrten vorher (ab \(Fmt.day(fx.beforeFrom))) gegen \(fx.afterTrips) Fahrten nachher (bis \(Fmt.day(min(fx.afterTo, Date())))). Nur ruhige Fahrt bei warmem Motor.")
                     .font(.caption).foregroundStyle(.secondary)
-                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
-                    GridRow {
-                        Text("Bereich")
-                        Text("vorher").gridColumnAlignment(.trailing)
-                        Text("nachher").gridColumnAlignment(.trailing)
-                        Text("Δ").gridColumnAlignment(.trailing)
-                        Text("Ziel").gridColumnAlignment(.trailing)
-                        Text("")
-                    }
-                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    Divider().gridCellUnsizedAxes(.horizontal)
-                    ForEach(Regime.judged) { r in
-                        let b = fx.lambda(r, after: false)
-                        let a = fx.lambda(r, after: true)
-                        let t = targets.target(r)
-                        GridRow {
-                            HStack(spacing: 6) { Circle().fill(r.tint).frame(width: 8, height: 8); Text(r.title).lineLimit(1).fixedSize() }
-                            Text(Fmt.num(b, 3))
-                            Text(Fmt.num(a, 3)).fontWeight(.semibold)
-                            Text(Fmt.signed(fx.delta(r), 3))
-                            Text(Fmt.num(t, 2)).foregroundStyle(.secondary)
-                            verdict(b, a, t)
-                        }
-                        .monospacedDigit()
-                    }
+                ViewThatFits(in: .horizontal) {
+                    table(fx, targets: targets, chips: true)
+                    table(fx, targets: targets, chips: false)
                 }
                 Divider()
                 HStack(spacing: 24) {
@@ -141,6 +119,42 @@ struct EffectCard: View {
                 }
             }
         }
+    }
+
+    private func table(_ fx: LogEffect, targets: MixtureTargets, chips: Bool) -> some View {
+        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+            GridRow {
+                Text("Bereich")
+                Text("vorher").gridColumnAlignment(.trailing)
+                Text("nachher").gridColumnAlignment(.trailing)
+                Text("Δ").gridColumnAlignment(.trailing)
+                Text("Ziel").gridColumnAlignment(.trailing)
+                if chips { Text("") }
+            }
+            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Divider().gridCellUnsizedAxes(.horizontal)
+            ForEach(Regime.judged) { r in
+                let b = fx.lambda(r, after: false)
+                let a = fx.lambda(r, after: true)
+                let t = targets.target(r)
+                GridRow {
+                    HStack(spacing: 6) { Circle().fill(r.tint).frame(width: 8, height: 8); Text(r.title) }
+                    Text(Fmt.num(b, 3))
+                    Text(Fmt.num(a, 3)).fontWeight(.semibold)
+                    Text(Fmt.signed(fx.delta(r), 3)).foregroundStyle(chips ? Color.primary : tint(b, a, t))
+                    Text(Fmt.num(t, 2)).foregroundStyle(.secondary)
+                    if chips { verdict(b, a, t) }
+                }
+                .lineLimit(1)
+                .monospacedDigit()
+            }
+        }
+    }
+
+    private func tint(_ b: Double?, _ a: Double?, _ t: Double?) -> Color {
+        guard let b, let a, let t else { return .secondary }
+        let db = abs(b - t), da = abs(a - t)
+        return da < db - 0.01 ? .green : (da > db + 0.01 ? .red : .secondary)
     }
 
     @ViewBuilder

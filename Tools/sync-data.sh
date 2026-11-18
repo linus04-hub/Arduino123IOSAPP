@@ -82,6 +82,9 @@ def walk(o):
             walk(v)
 
 walk(data)
+if not found:
+    print("KEINE_DATEIEN")
+    sys.exit(0)
 
 def local(p):
     p = p.replace("file://", "")
@@ -132,6 +135,29 @@ copy_one() {
     xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
         --domain-identifier "$BUNDLE" "$@" >> "$LOG" 2>&1
 }
+
+# Liste nicht lesbar: Aufbau ins Protokoll (zum Nachbessern) und ganze Ordner holen
+if [ "$LIST" = "KEINE_DATEIEN" ]; then
+    log "Dateiliste vom iPhone nicht verstanden, Anfang der Antwort:"
+    head -c 1500 "$J" >> "$LOG"; echo >> "$LOG"
+    n=0
+    for SRC in "Documents" "Library/Application Support"; do
+        rm -rf "$DEST/$SRC.part"
+        mkdir -p "$(dirname "$DEST/$SRC")"
+        if { copy_one --user mobile --source "$SRC" --destination "$DEST/$SRC.part" \
+             || copy_one --source "$SRC" --destination "$DEST/$SRC.part"; } && [ -d "$DEST/$SRC.part" ]; then
+            rm -rf "$DEST/$SRC"
+            mv "$DEST/$SRC.part" "$DEST/$SRC"
+            n=$((n + 1))
+        else
+            rm -rf "$DEST/$SRC.part"
+        fi
+    done
+    date +%s > "$APPDATA/letzter-abgleich.txt"
+    if [ "$n" -eq 2 ]; then log "Vom iPhone geholt: beide Ordner komplett"; exit 0; fi
+    log "Ordner holen fehlgeschlagen ($n von 2)"
+    exit 3
+fi
 
 n=0
 fail=0

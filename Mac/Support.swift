@@ -101,20 +101,6 @@ struct MacSettingsView: View {
 // nacheinander zeigen, jede als PNG ablegen, beenden. Fuer den Workflow
 // auf GitHub, damit sich die Oberflaeche ohne Mac pruefen laesst.
 
-/// Beim Bildschirmfoto kann die durchscheinende Seitenleiste nicht gezeichnet
-/// werden. Dann deckend, damit man ihren Inhalt sieht.
-struct SnapshotOpaque: ViewModifier {
-    func body(content: Content) -> some View {
-        if Snapshot.directory != nil {
-            content
-                .scrollContentBackground(.hidden)
-                .background(Color(nsColor: .windowBackgroundColor))
-        } else {
-            content
-        }
-    }
-}
-
 enum Snapshot {
     static var directory: URL? {
         let a = CommandLine.arguments
@@ -158,7 +144,7 @@ enum Snapshot {
         ]
         for (name, action) in steps {
             action()
-            await wait(name == "02-fahrt" || name.hasPrefix("03") ? 6 : 3.5)
+            await wait(name == "02-fahrt" || name.hasPrefix("03") || name.hasPrefix("09") ? 6 : 3.5)
             if name == "02-fahrt" {
                 app.snapshotHover = 600
                 app.snapshotSelection = 540...780
@@ -210,7 +196,7 @@ enum Snapshot {
         var best: NSScrollView?
         var bestArea: CGFloat = 0
         func walk(_ v: NSView) {
-            if let s = v as? NSScrollView, let doc = s.documentView {
+            if let s = v as? NSScrollView, s.documentView != nil {
                 // die Seitenleiste ist schmal, die Seite selbst breit und hoch
                 let area = s.frame.width * s.frame.height
                 if s.frame.width > 500 && area > bestArea {

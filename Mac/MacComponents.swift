@@ -217,15 +217,24 @@ struct RegimeTable: View {
     var showShare = true
 
     var body: some View {
+        // Ist die Karte schmal, fällt die Spalte mit dem Urteil weg.
+        // Die Farbe der Abweichung sagt dann dasselbe.
+        ViewThatFits(in: .horizontal) {
+            table(chips: true)
+            table(chips: false)
+        }
+    }
+
+    private func table(chips: Bool) -> some View {
         let total = regimes.values.reduce(0) { $0 + $1.seconds }
-        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 7) {
+        return Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 7) {
             GridRow {
                 Text("Bereich")
                 if showShare { Text("Anteil").gridColumnAlignment(.trailing) }
                 Text("λ").gridColumnAlignment(.trailing)
                 Text("Ziel").gridColumnAlignment(.trailing)
                 Text("Abw.").gridColumnAlignment(.trailing)
-                Text("")
+                if chips { Text("") }
             }
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
@@ -238,7 +247,7 @@ struct RegimeTable: View {
                 GridRow {
                     HStack(spacing: 6) {
                         Circle().fill(r.tint).frame(width: 8, height: 8)
-                        Text(r.title).lineLimit(1).fixedSize()
+                        Text(r.title)
                     }
                     if showShare {
                         Text(total > 0 ? String(format: "%.0f %%", (st?.seconds ?? 0) / total * 100) : "–")
@@ -248,12 +257,16 @@ struct RegimeTable: View {
                     Text(Fmt.num(t, 2)).foregroundStyle(.secondary)
                     Text(l != nil && t != nil ? Fmt.signed(l! - t!, 3) : "–")
                         .foregroundStyle(j?.severity.tint ?? .secondary)
-                    if let j, t != nil {
-                        SeverityChip(text: j.text, severity: j.severity)
-                    } else {
-                        Text(l == nil ? "keine Daten" : "ohne Ziel").font(.caption).foregroundStyle(.secondary)
+                        .help(j?.text ?? "")
+                    if chips {
+                        if let j, t != nil {
+                            SeverityChip(text: j.text, severity: j.severity)
+                        } else {
+                            Text(l == nil ? "keine Daten" : "ohne Ziel").font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }
+                .lineLimit(1)
                 .monospacedDigit()
             }
         }
@@ -268,7 +281,8 @@ struct RPMAxis: ViewModifier {
                 AxisGridLine()
                 AxisTick()
                 AxisValueLabel {
-                    if let d = v.as(Double.self) { Text(String(format: "%.0f", d)) }
+                    // die letzte Zahl stößt an die Lambda-Achse
+                    if let d = v.as(Double.self) { Text(d < 5500 ? String(format: "%.0f", d) : "") }
                 }
             }
         }

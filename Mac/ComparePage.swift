@@ -165,7 +165,7 @@ struct ComparePage: View {
         let diff = MapDiff.lambda(a, b, steady: steady)
         Card(title: "Kennfeld: B minus A", symbol: "square.grid.3x3.fill") {
             HeatmapView(values: diff, image: MapData.image(diff, stops: Self.diffStops), stops: Self.diffStops,
-                        digits: 2, signed: true,
+                        digits: 2, signed: true, emptyDim: 0.12,
                         tooltip: { r, c in
                             let la = a.lambda(row: r, col: c, steady: steady)
                             let lb = b.lambda(row: r, col: c, steady: steady)

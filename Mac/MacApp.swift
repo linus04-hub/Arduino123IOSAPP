@@ -194,7 +194,6 @@ struct RootView: View {
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
             .safeAreaInset(edge: .bottom) { SidebarFooter() }
-            .modifier(SnapshotOpaque())
         } detail: {
             Group {
                 if !lib.loaded {
