@@ -1,0 +1,19 @@
+Start 2026-11-18 22:04:22 +0000
+Daten: 26 Fahrten, 26 ausgewertet
+01-uebersicht.png
+02-fahrt.png
+02-fahrt-2.png
+02-fahrt-3.png
+02-fahrt-4.png
+03-gesamt.png
+03-gesamt-2.png
+04-gesamt-seit.png
+04-gesamt-seit-2.png
+05-messreihen.png
+05-messreihen-2.png
+06-vergleich.png
+07-zuege.png
+08-gasstoesse.png
+08-gasstoesse-2.png
+09-logbuch.png
+10-tankbuch.png
