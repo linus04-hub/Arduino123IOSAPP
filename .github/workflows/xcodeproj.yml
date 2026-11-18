@@ -1,0 +1,51 @@
+# Erzeugt CitroenAnzeige.xcodeproj aus project.yml und legt es ins Repo.
+# Dann reicht auf dem Mac: ZIP laden, CitroenAnzeige.xcodeproj oeffnen, ▶.
+# Ohne Homebrew und XcodeGen. Der Commit kommt vom GITHUB_TOKEN und
+# startet deshalb keinen neuen Lauf.
+name: Xcode-Projekt erzeugen
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - project.yml
+      - Sources/**
+      - Shared/**
+      - Widgets/**
+      - UITests/**
+      - Resources/**
+      - .github/workflows/xcodeproj.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xcodeproj
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Projekt erzeugen
+        run: |
+          command -v xcodegen >/dev/null || brew install xcodegen
+          xcodegen generate
+
+      - name: Ins Repo legen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Info.plist-Dateien erzeugt XcodeGen ebenfalls, ohne sie fehlt beim Oeffnen etwas
+          git add -A CitroenAnzeige.xcodeproj Info.plist CitroenWidgets-Info.plist
+          if git diff --cached --quiet; then
+            echo "Projekt unveraendert"
+            exit 0
+          fi
+          git commit -m "Xcode-Projekt aktualisiert"
+          git pull --rebase -q origin main
+          git push origin HEAD:main

@@ -50,6 +50,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 34KNQH7F76      # Linus (Personal Team), dann ist das Team in Xcode schon gewaehlt
 
   CitroenWidgets:
     type: app-extension
@@ -70,6 +71,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: de.linus.citroenanzeige.widgets
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 34KNQH7F76      # Linus (Personal Team), dann ist das Team in Xcode schon gewaehlt
         SKIP_INSTALL: YES
 
   CitroenAnzeigeUITests:
@@ -85,3 +87,4 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 34KNQH7F76      # Linus (Personal Team), dann ist das Team in Xcode schon gewaehlt
