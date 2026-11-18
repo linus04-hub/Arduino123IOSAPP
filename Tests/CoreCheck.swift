@@ -284,6 +284,25 @@ sc.tune = TuneReading(rpm: 0, advance: 0, mapKPa: 70, moduleTemp: 30, tuningMode
 let checks = SelfCheck.run(sc)
 check(checks.first { $0.title.hasPrefix("Saugrohrdruck") }?.severity == .warn, "Saugrohrdruck 70 kPa bei stehendem Motor faellt auf")
 
+// ── Fahrt-CSV ──
+let csv = "Zeit;Sekunden;Lambda;Drehzahl;Saugrohr_kPa;Oeldruck_bar;Oeltemp_C;Tank_Prozent;Zuendwinkel_Grad;Bordnetz_V;Spule_A;Modul_C;Tempo_kmh;Breite;Laenge;Markierung\n"
+    + "2026-11-18 10:00:00.00;0,00;4,500;;;0,00;20,5;55;;;;;;;;\n"
+    + "2026-11-18 10:00:00.25;0,25;0,987;2500;45;3,10;85,0;55;22,4;13,9;3,70;40;52,3;49,487000;8,466000;1\n"
+    + "kaputte Zeile\n"
+let rowsCSV = TripCSV.parse(csv)
+check(rowsCSV.count == 2, "CSV: zwei Zeilen")
+check(rowsCSV.first?.lambdaValid == nil && rowsCSV.first?.rpm == nil, "CSV: Sonde nicht bereit, leere Felder")
+check(near(rowsCSV.last?.lambda, 0.987, 1e-9) && rowsCSV.last?.marker == 1 && near(rowsCSV.last?.lon, 8.466, 1e-9), "CSV: Werte mit Komma")
+var tripRows: [TripRow] = []
+for i in 0..<400 {
+    tripRows.append(TripRow(t: Double(i) * 0.25, lambda: 0.95, rpm: 2500, map: 50, oilP: 3, oilT: 85,
+                            tank: nil, advance: 25, voltage: 14, coil: nil, moduleTemp: nil, speed: 50,
+                            lat: nil, lon: nil, marker: nil))
+}
+let fromTrip = TuningSession.from(rows: tripRows, name: "Fahrt")
+check(fromTrip.lambdaCount == 400 && fromTrip.steadyCount > 350, "Messreihe aus Fahrt mit ruhiger Fahrt")
+check(tripRows[3].sample(start: at(0)).time == at(0.75), "Zeile als Messwert")
+
 if failures == 0 {
     print("Rechenkern: alle Pruefungen bestanden")
 } else {

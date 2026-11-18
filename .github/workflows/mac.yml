@@ -1,0 +1,93 @@
+# Baut die Mac-App "Citroën Analyse", prueft den Rechenkern und macht auf
+# Nebenzweigen Bildschirmfotos aller Seiten mit Beispieldaten
+# (Zweig "mac-screenshots").
+name: Mac-App
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, mac]
+    paths:
+      - Mac/**
+      - MacResources/**
+      - Sources/**
+      - Tests/MacCheck.swift
+      - project.yml
+      - .github/workflows/mac.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mac-Kern pruefen
+        run: |
+          mkdir -p "$RUNNER_TEMP/mac"
+          cp Tests/MacCheck.swift "$RUNNER_TEMP/mac/main.swift"
+          S=Sources
+          swiftc -O -swift-version 5 $S/Samples.swift $S/Mixture.swift $S/TuningSession.swift \
+            $S/MixtureDiagnosis.swift $S/TipInDetector.swift $S/PullDetector.swift $S/AlertMonitor.swift \
+            $S/CarbSetup.swift $S/TripModel.swift Mac/MacCore.swift Mac/DemoData.swift \
+            "$RUNNER_TEMP/mac/main.swift" -o "$RUNNER_TEMP/mac/check"
+          "$RUNNER_TEMP/mac/check" -v
+
+      - name: Projekt erzeugen
+        run: |
+          command -v xcodegen >/dev/null || brew install xcodegen
+          xcodegen generate
+
+      - name: Bauen
+        run: |
+          set -o pipefail
+          xcodebuild -project CitroenAnzeige.xcodeproj -scheme CitroenMac -configuration Release \
+            -destination 'platform=macOS' -derivedDataPath build/mac build 2>&1 | tee build-mac.log \
+            | grep -E "error:|warning: .*(deprecated|never|unused)|BUILD (SUCCEEDED|FAILED)" || true
+          test -d build/mac/Build/Products/Release/CitroenAnalyse.app
+
+      - name: Fehlerprotokoll
+        if: failure()
+        run: grep -B2 -A6 "error:" build-mac.log | head -300 || true
+
+      - name: Bildschirmfotos
+        if: github.ref != 'refs/heads/main'
+        run: |
+          APP="build/mac/Build/Products/Release/CitroenAnalyse.app"
+          mkdir -p macshots
+          "$APP/Contents/MacOS/CitroenAnalyse" -snapshot "$PWD/macshots" > macshots/stdout.txt 2>&1 &
+          PID=$!
+          for i in $(seq 1 150); do
+            kill -0 $PID 2>/dev/null || break
+            sleep 2
+          done
+          kill $PID 2>/dev/null || true
+          ls -la macshots
+
+      - name: Bilder auf Zweig "mac-screenshots" legen
+        if: github.ref != 'refs/heads/main'
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          cp build-mac.log macshots/ 2>/dev/null || true
+          cd macshots
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b mac-screenshots
+          git add -A
+          git commit -q -m "Mac-Bildschirmfotos von $SHA"
+          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" mac-screenshots
+
+      - name: App als ZIP
+        run: |
+          cd build/mac/Build/Products/Release
+          ditto -c -k --keepParent CitroenAnalyse.app "$GITHUB_WORKSPACE/CitroenAnalyse-mac.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CitroenAnalyse-mac
+          path: CitroenAnalyse-mac.zip
+          retention-days: 30

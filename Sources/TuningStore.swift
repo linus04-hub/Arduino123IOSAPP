@@ -85,13 +85,7 @@ final class TuningStore: ObservableObject {
 
     /// Eine aufgezeichnete Fahrt als Messreihe speichern
     func save(rows: [TripRow], name: String) {
-        var s = TuningSession(name: name.isEmpty ? "Fahrt" : name)
-        var steady = SteadyTracker()
-        for r in rows {
-            let calm = steady.push(t: r.t, rpm: r.rpm, map: r.map)
-            s.add(SessionPoint(lambda: r.lambda.flatMap { $0 <= 2 ? $0 : nil }, rpm: r.rpm, map: r.map,
-                               advance: r.advance, oilT: r.oilT, speed: r.speed, steady: calm))
-        }
+        let s = TuningSession.from(rows: rows, name: name.isEmpty ? "Fahrt" : name)
         Self.write(s, to: Self.url(for: s))
         loadSaved()
     }

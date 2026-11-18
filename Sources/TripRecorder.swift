@@ -6,53 +6,6 @@ import CoreLocation
 // Zusammenfassung und Markierungen, beide in Dokumente/Fahrten.
 // Die CSV nutzt ";" und Dezimalkomma, damit sie direkt in Excel aufgeht.
 
-struct TripMarker: Codable, Hashable, Identifiable {
-    var id: Int              // laufende Nummer 1, 2, 3 …
-    var time: Date
-    var note: String = ""
-}
-
-struct TripSummary: Codable, Hashable, Identifiable {
-    var id: String           // Dateiname ohne Endung, z. B. 2026-10-14_10-05-12
-    var start: Date
-    var end: Date
-    var distanceKm: Double = 0
-    var maxSpeed: Double?
-    var maxRPM: Double?
-    var maxOilT: Double?
-    var minOilPRunning: Double?      // nur bei laufendem Motor (ab 1200 U/min)
-    var secondsOver5000: Double = 0
-    var lambdaSum: Double = 0
-    var lambdaCount: Int = 0
-    var markers: [TripMarker] = []
-
-    var duration: TimeInterval { end.timeIntervalSince(start) }
-    var avgLambda: Double? { lambdaCount > 0 ? lambdaSum / Double(lambdaCount) : nil }
-    var avgSpeed: Double? {
-        guard duration > 60, distanceKm > 0.1 else { return nil }
-        return distanceKm / (duration / 3600)
-    }
-}
-
-/// Eine Zeile der CSV, fuer die Auswertung
-struct TripRow {
-    var t: Double            // Sekunden seit Start
-    var lambda: Double?
-    var rpm: Double?
-    var map: Double?
-    var oilP: Double?
-    var oilT: Double?
-    var tank: Double?
-    var advance: Double?
-    var voltage: Double?
-    var coil: Double?
-    var moduleTemp: Double?
-    var speed: Double?
-    var lat: Double?
-    var lon: Double?
-    var marker: Int?
-}
-
 final class TripRecorder: ObservableObject {
     @Published private(set) var isRecording = false
     @Published private(set) var current: TripSummary?      // laufende Fahrt, 1x/s aktualisiert
@@ -290,19 +243,7 @@ final class TripRecorder: ObservableObject {
     /// CSV einer Fahrt einlesen (laeuft im Hintergrund)
     static func loadRows(_ id: String) -> [TripRow] {
         guard let text = try? String(contentsOf: csvURL(id), encoding: .utf8) else { return [] }
-        var rows: [TripRow] = []
-        var first = true
-        for line in text.split(separator: "\n") {
-            if first { first = false; continue }
-            let c = line.split(separator: ";", omittingEmptySubsequences: false)
-            guard c.count >= 16 else { continue }
-            func d(_ k: Int) -> Double? { Double(c[k].replacingOccurrences(of: ",", with: ".")) }
-            guard let t = d(1) else { continue }
-            rows.append(TripRow(t: t, lambda: d(2), rpm: d(3), map: d(4), oilP: d(5), oilT: d(6),
-                                tank: d(7), advance: d(8), voltage: d(9), coil: d(10), moduleTemp: d(11),
-                                speed: d(12), lat: d(13), lon: d(14), marker: Int(String(c[15]))))
-        }
-        return rows
+        return TripCSV.parse(text)
     }
 
     // ── intern ───────────────────────────────────────────────────

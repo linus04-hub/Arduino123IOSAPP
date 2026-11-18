@@ -15,6 +15,8 @@ on:
       - Widgets/**
       - UITests/**
       - Resources/**
+      - Mac/**
+      - MacResources/**
       - .github/workflows/xcodeproj.yml
 
 permissions:
@@ -41,7 +43,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # Info.plist-Dateien erzeugt XcodeGen ebenfalls, ohne sie fehlt beim Oeffnen etwas
-          git add -A CitroenAnzeige.xcodeproj Info.plist CitroenWidgets-Info.plist
+          git add -A CitroenAnzeige.xcodeproj Info.plist CitroenWidgets-Info.plist CitroenMac-Info.plist
           if git diff --cached --quiet; then
             echo "Projekt unveraendert"
             exit 0

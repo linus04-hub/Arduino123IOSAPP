@@ -5,6 +5,7 @@ options:
   bundleIdPrefix: de.linus
   deploymentTarget:
     iOS: "16.1"          # Live-Aktivitaeten gibt es ab iOS 16.1
+    macOS: "14.0"        # Mac-App "Citroën Analyse"
 settings:
   base:
     MARKETING_VERSION: "2.0"
@@ -88,3 +89,44 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 34KNQH7F76      # Linus (Personal Team), dann ist das Team in Xcode schon gewaehlt
+
+  # Auswertung am Mac. Liest die Daten der iPhone-App, nur lesend.
+  # Ad-hoc signiert ("-"), braucht kein Apple-Konto und laeuft unbegrenzt.
+  CitroenMac:
+    type: application
+    platform: macOS
+    scheme: {}
+    sources:
+      - path: Mac
+      - path: MacResources
+      - path: Sources/Samples.swift
+      - path: Sources/Mixture.swift
+      - path: Sources/TuningSession.swift
+      - path: Sources/MixtureDiagnosis.swift
+      - path: Sources/TipInDetector.swift
+      - path: Sources/PullDetector.swift
+      - path: Sources/AlertMonitor.swift
+      - path: Sources/CarbSetup.swift
+      - path: Sources/TripModel.swift
+      - path: Sources/MapData.swift
+    info:
+      path: CitroenMac-Info.plist
+      properties:
+        CFBundleDisplayName: Citroën Analyse
+        CFBundleName: Citroën Analyse
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSApplicationCategoryType: public.app-category.utilities
+        LSMinimumSystemVersion: "14.0"
+        NSHumanReadableCopyright: Linus Beeck
+    settings:
+      base:
+        PRODUCT_NAME: CitroenAnalyse
+        PRODUCT_BUNDLE_IDENTIFIER: de.linus.citroenanzeige.mac
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_APP_SANDBOX: NO
+        COMBINE_HIDPI_IMAGES: YES

@@ -33,7 +33,7 @@ jobs:
           swiftc -swift-version 5 \
             Sources/Samples.swift Sources/Mixture.swift Sources/TuningSession.swift \
             Sources/MixtureDiagnosis.swift Sources/TipInDetector.swift Sources/PullDetector.swift \
-            Sources/AlertMonitor.swift Sources/CarbSetup.swift Sources/LinkDiagnostics.swift \
+            Sources/AlertMonitor.swift Sources/CarbSetup.swift Sources/LinkDiagnostics.swift Sources/TripModel.swift \
             Sources/Tune123.swift "$RUNNER_TEMP/core/main.swift" -o "$RUNNER_TEMP/core/check"
           "$RUNNER_TEMP/core/check"
 
