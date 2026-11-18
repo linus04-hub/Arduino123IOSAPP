@@ -89,7 +89,7 @@ final class AppState: ObservableObject {
     @Published var tripID: String?
     @Published var sessionID: UUID?
     @Published var logID: UUID?
-    @Published var period: PeriodChoice = .days30
+    @Published var period: PeriodChoice = .sinceChange
     @Published var compareA: SourceChoice?
     @Published var compareB: SourceChoice?
     @Published var channels: [Channel] = AppState.loadChannels()
@@ -194,6 +194,7 @@ struct RootView: View {
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
             .safeAreaInset(edge: .bottom) { SidebarFooter() }
+            .modifier(SnapshotOpaque())
         } detail: {
             Group {
                 if !lib.loaded {

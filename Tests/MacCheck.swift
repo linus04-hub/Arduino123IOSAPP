@@ -97,6 +97,18 @@ check(Period.last(days: 7, now: now).contains(now.addingTimeInterval(-86_400)), 
 check(!Period(from: now, to: nil).contains(now.addingTimeInterval(-1)), "Zeitraum nicht enthalten")
 check(TimeText.duration(3720) == "1:02 h" && TimeText.clock(75) == "1:15", "Zeit als Text")
 
+// Texte
+check(SignedText.of(-0.0004, 3) == "±0.000" && SignedText.of(0.012, 2) == "+0.01" && SignedText.of(-0.07, 2) == "-0.07", "Vorzeichen")
+let base = demo.book.entries.min { $0.date < $1.date }!
+check(base.isBaseline && base.label == "Ausgangsstand", "Erster Logbuch-Eintrag ist der Ausgangsstand")
+check(demo.book.entries.filter { $0.isBaseline }.count == 1, "nur ein Ausgangsstand")
+
+// Zuege: Leistung plausibel (2CV6 hat knapp 22 kW)
+let pullPeaks = stats.flatMap { $0.pulls }.compactMap { p -> Double? in
+    PullAnalysis(p, target: MixtureTargets().stage2, vehicle: Vehicle()).peak?.kW
+}
+check(!pullPeaks.isEmpty && pullPeaks.allSatisfy { $0 < 30 }, "Leistung je Zug plausibel, max \(pullPeaks.max() ?? 0)")
+
 if CommandLine.arguments.contains("-v") {
     print("Fahrten", demo.trips.count, "km", Int(totals.km), "h", totals.engineHours, "Zuege", totals.pulls, "Gasstoesse", totals.tipIns, "Warnungen", totals.alerts)
     for e in fx { print(e.entry.title, e.beforeTrips, e.afterTrips, Regime.allCases.map { r in "\(r.rawValue) \(e.lambda(r, after: false).map { String(format: "%.3f", $0) } ?? "-")→\(e.lambda(r, after: true).map { String(format: "%.3f", $0) } ?? "-")" }.joined(separator: "  "), e.beforePower ?? -1, e.afterPower ?? -1) }

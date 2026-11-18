@@ -224,7 +224,7 @@ struct TripAnalysisView: View {
                         selection = nil
                     }
                 }
-                .frame(height: CGFloat(lanes.count) * LaneGeo.laneHeight + LaneGeo.axis)
+                .frame(height: LaneGeo.total(lanes))
                 VStack(alignment: .leading, spacing: 10) {
                     HoverReadout(cursor: cursor, rows: rows, start: trip.summary.start, targets: targets)
                     if !trip.summary.markers.isEmpty { markerList }
@@ -276,8 +276,10 @@ struct TripAnalysisView: View {
                                     Text(Fmt.time(p.time)).monospacedDigit()
                                     Text(p.kind == .steady ? "Dauervollgas" : String(format: "%.0f→%.0f", a.rpmFrom, a.rpmTo))
                                         .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .fixedSize()
                                     Spacer()
-                                    if let k = a.peak?.kW { Text(String(format: "≈ %.0f kW", k)).monospacedDigit() }
+                                    if let k = PowerSanity.ok(a.peak?.kW) { Text(String(format: "≈ %.0f kW", k)).monospacedDigit() }
                                     SeverityChip(text: v.0, severity: v.1)
                                 }
                             }

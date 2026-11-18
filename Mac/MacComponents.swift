@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Charts
 
 // ── Bausteine der Oberflaeche ────────────────────────────────────
 
@@ -100,7 +101,7 @@ enum Fmt {
 
     static func signed(_ v: Double?, _ digits: Int) -> String {
         guard let v else { return "–" }
-        return String(format: "%+.\(digits)f", v)
+        return SignedText.of(v, digits)
     }
 }
 
@@ -200,6 +201,8 @@ struct SeverityChip: View {
     var body: some View {
         Text(text)
             .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .fixedSize()
             .foregroundStyle(severity.tint)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -215,7 +218,7 @@ struct RegimeTable: View {
 
     var body: some View {
         let total = regimes.values.reduce(0) { $0 + $1.seconds }
-        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 7) {
+        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 7) {
             GridRow {
                 Text("Bereich")
                 if showShare { Text("Anteil").gridColumnAlignment(.trailing) }
@@ -235,7 +238,7 @@ struct RegimeTable: View {
                 GridRow {
                     HStack(spacing: 6) {
                         Circle().fill(r.tint).frame(width: 8, height: 8)
-                        Text(r.title)
+                        Text(r.title).lineLimit(1).fixedSize()
                     }
                     if showShare {
                         Text(total > 0 ? String(format: "%.0f %%", (st?.seconds ?? 0) / total * 100) : "–")
@@ -255,6 +258,25 @@ struct RegimeTable: View {
             }
         }
     }
+}
+
+/// Drehzahl-Achse ohne Tausenderpunkt und ohne abgeschnittene Zahl am Rand
+struct RPMAxis: ViewModifier {
+    func body(content: Content) -> some View {
+        content.chartXAxis {
+            AxisMarks(values: [1000.0, 2000, 3000, 4000, 5000, 6000]) { v in
+                AxisGridLine()
+                AxisTick()
+                AxisValueLabel {
+                    if let d = v.as(Double.self) { Text(String(format: "%.0f", d)) }
+                }
+            }
+        }
+    }
+}
+
+extension View {
+    func rpmAxis() -> some View { modifier(RPMAxis()) }
 }
 
 /// Speichern-Dialog fuer Text (CSV)

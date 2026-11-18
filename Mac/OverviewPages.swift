@@ -31,7 +31,7 @@ struct OverviewView: View {
                     StatTile(title: "Verbrauch", value: avgFuel.map { String(format: "%.1f l", $0) } ?? "–",
                              detail: avgFuel == nil ? "Tankbuch auf dem iPhone führen" : "je 100 km im Schnitt", symbol: "fuelpump")
                     StatTile(title: "Letzte Änderung", value: lastEntry.map { Fmt.day($0.date) } ?? "–",
-                             detail: lastEntry?.title ?? "Logbuch ist leer", symbol: "wrench.and.screwdriver")
+                             detail: lastEntry?.label ?? "Logbuch ist leer", symbol: "wrench.and.screwdriver")
                 }
                 HStack(alignment: .top, spacing: 14) {
                     Card(title: "Gemisch der letzten 30 Tage", symbol: "stethoscope") {
@@ -154,7 +154,7 @@ struct LambdaTrendChart: View {
                         .foregroundStyle(Color.orange.opacity(e.id == highlight ? 1 : 0.55))
                         .lineStyle(StrokeStyle(lineWidth: e.id == highlight ? 2 : 1, dash: [4, 3]))
                         .annotation(position: .top, alignment: .leading) {
-                            Text(e.changes.first ?? e.note)
+                            Text(e.shortLabel)
                                 .font(.caption2)
                                 .foregroundStyle(.orange)
                                 .lineLimit(1)
@@ -173,6 +173,7 @@ struct LambdaTrendChart: View {
             .chartForegroundStyleScale(domain: Regime.judged.map { $0.title }, range: Regime.judged.map { $0.tint })
             .chartYScale(domain: 0.8...1.2)
             .chartLegend(position: .bottom)
+            .padding(.top, 14)
         }
     }
 }

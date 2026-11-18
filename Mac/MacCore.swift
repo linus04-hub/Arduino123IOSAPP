@@ -458,8 +458,8 @@ enum Trend {
     /// Hoechste geschaetzte Radleistung je Zug
     static func power(_ pulls: [Pull], target: Double, vehicle: Vehicle) -> [TrendPoint] {
         pulls.compactMap { p in
-            guard p.kind == .pull, let k = PullAnalysis(p, target: target, vehicle: vehicle).peak?.kW,
-                  k > 0, k < 60 else { return nil }
+            guard p.kind == .pull, let k = PowerSanity.ok(PullAnalysis(p, target: target, vehicle: vehicle).peak?.kW)
+            else { return nil }
             return TrendPoint(date: p.time, series: "Leistung", value: k)
         }
     }
@@ -610,5 +610,38 @@ enum TimeText {
     static func clock(_ s: Double) -> String {
         let t = Int(s.rounded())
         return String(format: "%d:%02d", t / 60, t % 60)
+    }
+}
+
+/// Ein 2CV6 hat knapp 22 kW. Was weit darüber liegt, ist ein Messfehler
+/// (Schaltvorgang, Kupplung, Sprung im Tempo) und zählt nicht.
+enum PowerSanity {
+    static let maxKW = 40.0
+    static func ok(_ kW: Double?) -> Double? {
+        guard let k = kW, k > 0, k <= maxKW else { return nil }
+        return k
+    }
+}
+
+// ── Text ─────────────────────────────────────────────────────────
+
+/// Vorzeichen immer zeigen, aber kein "-0.000"
+enum SignedText {
+    static func of(_ v: Double, _ digits: Int) -> String {
+        let half = 0.5 / pow(10, Double(digits))
+        if abs(v) < half { return "±" + String(format: "%.\(digits)f", 0.0) }
+        return String(format: "%+.\(digits)f", v)
+    }
+}
+
+extension LogEntry {
+    /// Erster Eintrag: alle Werte kamen von "–". Das ist der Ausgangsstand, keine Änderung.
+    var isBaseline: Bool { !changes.isEmpty && changes.allSatisfy { $0.contains(": – → ") } }
+    /// Für Listen und Überschriften
+    var label: String { isBaseline ? "Ausgangsstand" : title }
+    /// Kurz, für Markierungen in Diagrammen
+    var shortLabel: String {
+        if isBaseline { return "Ausgangsstand" }
+        return changes.first ?? (note.isEmpty ? "Eintrag" : note)
     }
 }

@@ -151,6 +151,7 @@ enum DemoData {
         var cruiseRPM = 3200.0
         for (phase, len) in plan {
             var pt = 0.0
+            let startRPM = rpm
             if phase == .cruise { cruiseRPM = rnd.range(2600, 3900) }
             while pt < len {
                 // ── Soll fuer Drehzahl und Last ──
@@ -183,9 +184,9 @@ enum DemoData {
                     wantRPM = 2000 + min(1, pt / len) * 2600
                     wantMAP = 97
                 case .hold:
-                    // Autobahn bergauf, Dauervollgas
+                    // Autobahn bergauf, Dauervollgas: im 4. Gang zieht er nur langsam hoch
                     gear = 4
-                    wantRPM = 4300
+                    wantRPM = min(4300, startRPM + pt * 35)
                     wantMAP = 95
                 case .overrun:
                     wantRPM = max(1600, rpm - 220)

@@ -49,5 +49,5 @@ jobs:
             exit 0
           fi
           git commit -m "Xcode-Projekt aktualisiert"
-          git pull --rebase -q origin main
-          git push origin HEAD:main
+          git pull --rebase -q origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"

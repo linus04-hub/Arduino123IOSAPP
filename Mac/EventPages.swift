@@ -23,7 +23,7 @@ struct PullsPage: View {
         let items = all.filter { kind == 0 ? $0.pull.kind == .pull : $0.pull.kind == .steady }
         let chosen = items.filter { app.pullSelection.contains($0.id) }
         let shown = chosen.isEmpty ? Array(items.prefix(4)) : chosen
-        let peaks = all.compactMap { $0.a.peak?.kW }
+        let peaks = all.compactMap { PowerSanity.ok($0.a.peak?.kW) }
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -87,7 +87,7 @@ struct PullsPage: View {
                 TableColumn("Saugrohr") { i in Text(Fmt.num(i.a.mapMean, 0, unit: "kPa")).monospacedDigit() }
                 TableColumn("Ø λ") { i in Text(Fmt.num(i.a.lambdaMean, 3)).monospacedDigit() }
                 TableColumn("mager ab") { i in Text(i.a.leanFrom.map { String(format: "%.0f", $0) } ?? "–").monospacedDigit() }
-                TableColumn("Leistung") { i in Text(i.a.peak.map { String(format: "%.1f kW", $0.kW) } ?? "–").monospacedDigit() }
+                TableColumn("Leistung") { i in Text(PowerSanity.ok(i.a.peak?.kW).map { String(format: "%.1f kW", $0) } ?? "–").monospacedDigit() }
                 TableColumn("Gang") { i in Text(i.a.ratio.map { String(format: "%.1f km/h je 1000", $0) } ?? "–").monospacedDigit() }
                 TableColumn("Urteil") { i in
                     let v = PullVerdictText.of(i.a.verdict)
@@ -113,7 +113,7 @@ struct PowerTrend: View {
                         .foregroundStyle(Color.orange.opacity(0.6))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
                         .annotation(position: .top, alignment: .leading) {
-                            Text(e.changes.first ?? e.note).font(.caption2).foregroundStyle(.orange).lineLimit(1)
+                            Text(e.shortLabel).font(.caption2).foregroundStyle(.orange).lineLimit(1)
                         }
                 }
                 ForEach(points) { p in
@@ -123,6 +123,7 @@ struct PowerTrend: View {
                 }
             }
             .chartYScale(domain: .automatic(includesZero: false))
+            .padding(.top, 14)
         }
     }
 }
@@ -176,7 +177,7 @@ struct PullPowerChart: View {
     }
 
     var body: some View {
-        let pts = items.flatMap { it in it.a.power.map { P(rpm: $0.rpm, kW: $0.kW, series: it.label) } }
+        let pts = items.flatMap { it in it.a.power.filter { PowerSanity.ok($0.kW) != nil }.map { P(rpm: $0.rpm, kW: $0.kW, series: it.label) } }
         if pts.isEmpty {
             EmptyHint(text: "Ohne GPS-Tempo keine Leistung.", symbol: "bolt.slash")
         } else {
@@ -185,6 +186,7 @@ struct PullPowerChart: View {
                     .foregroundStyle(by: .value("Zug", p.series))
                     .interpolationMethod(.catmullRom)
             }
+            .rpmAxis()
             .chartLegend(position: .bottom)
         }
     }

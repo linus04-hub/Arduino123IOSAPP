@@ -8,7 +8,9 @@
 #      schon eine neue Signatur ausstellt; installiert wird nur, wenn sie
 #      wirklich länger gilt. Spätestens nach dem Ablauf holt Xcode eine neue.
 #   3. meldet das Ergebnis als Mitteilung auf dem Mac
-# Sonst passiert nichts, die App auf dem iPhone wird nur bei Bedarf ersetzt.
+#   4. baut bei neuer Version auch die Mac-App „Citroën Analyse“ nach ~/Applications
+#   5. holt die Daten vom iPhone für die Mac-App (sync-data.sh)
+# Die App auf dem iPhone wird nur bei Bedarf ersetzt.
 #
 # Von Hand sofort ausführen:  FORCE=1 bash ~/.citroen-auto/auto-update.sh
 # Protokoll:                   ~/.citroen-auto/auto.log
@@ -22,6 +24,7 @@ STATE="$BASE/state"
 CONF="$BASE/config"
 APP=CitroenAnzeige
 BUNDLE=de.linus.citroenanzeige
+MAC_APP="$HOME/Applications/Citroën Analyse.app"
 RENEW_BEFORE=$((36 * 60 * 60))          # ab 36 h vor Ablauf neu versuchen
 FORCE="${FORCE:-0}"
 
@@ -30,9 +33,14 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S')  $*" | tee -a "$LOG"; }
 notify() { osascript -e "display notification \"$1\" with title \"Citroën\"" >/dev/null 2>&1 || true; }
+sync_data() {
+    [ -f "$BASE/sync-data.sh" ] || return 0
+    bash "$BASE/sync-data.sh" >/dev/null 2>&1 || true
+}
 fail() {
     log "FEHLER: $1"
     notify "$1"
+    sync_data
     exit 1
 }
 when() { LC_TIME=de_DE.UTF-8 date -r "$1" '+%a %d.%m. %H:%M'; }
@@ -62,6 +70,7 @@ source "$CONF"                           # UDID, NAME
 [ -d "$REPO/.git" ] || fail "Projektordner fehlt: auto-setup.sh erneut ausführen"
 
 LAST_COMMIT=""
+LAST_MAC=""
 EXPIRES=0
 # shellcheck source=/dev/null
 [ -f "$STATE" ] && source "$STATE"
@@ -79,6 +88,35 @@ else
 fi
 HEAD_COMMIT="$(git rev-parse HEAD)"
 
+save_state() {
+    {
+        echo "LAST_COMMIT=$LAST_COMMIT"
+        echo "LAST_MAC=$LAST_MAC"
+        echo "EXPIRES=$EXPIRES"
+    } > "$STATE"
+}
+
+# ── Mac-App „Citroën Analyse“ ──
+if [ "$HEAD_COMMIT" != "$LAST_MAC" ] || [ ! -d "$MAC_APP" ]; then
+    if grep -q "CitroenMac" "$REPO/$APP.xcodeproj/project.pbxproj" 2>/dev/null; then
+        log "Baue Mac-App …"
+        if xcodebuild -quiet -project "$REPO/$APP.xcodeproj" -scheme CitroenMac -configuration Release \
+            -destination 'platform=macOS' -derivedDataPath "$BASE/build-mac" build >> "$LOG" 2>&1; then
+            mkdir -p "$HOME/Applications"
+            rm -rf "$MAC_APP.neu"
+            if ditto "$BASE/build-mac/Build/Products/Release/CitroenAnalyse.app" "$MAC_APP.neu"; then
+                rm -rf "$MAC_APP"
+                mv "$MAC_APP.neu" "$MAC_APP"
+                LAST_MAC="$HEAD_COMMIT"
+                save_state
+                log "Mac-App aktualisiert: ~/Applications/Citroën Analyse"
+            fi
+        else
+            log "Mac-App: Bauen fehlgeschlagen"
+        fi
+    fi
+fi
+
 # ── 2. Muss etwas passieren? ──
 NOW=$(date +%s)
 REASON=""
@@ -95,6 +133,7 @@ elif [ $((EXPIRES - NOW)) -lt $RENEW_BEFORE ]; then
 fi
 if [ -z "$REASON" ]; then
     log "Nichts zu tun, gültig bis $(when "$EXPIRES")"
+    sync_data
     exit 0
 fi
 log "Starte: $REASON"
@@ -132,6 +171,7 @@ BUILD=$(plutil -extract CFBundleVersion raw -o - "$APP_PATH/Info.plist" 2>/dev/n
 # Sonst würde die App ohne Nutzen neu gestartet.
 if [ "$EARLY" = 1 ] && [ "$NEW_EXPIRES" -le $((EXPIRES + 3600)) ]; then
     log "Noch keine neue Signatur von Apple (gilt bis $(when "$EXPIRES")), nächster Versuch in 1 h"
+    sync_data
     exit 0
 fi
 
@@ -140,16 +180,18 @@ log "Installiere auf ${NAME:-iPhone} …"
 xcrun devicectl device install app --device "$UDID" "$APP_PATH" >> "$LOG" 2>&1 \
     || fail "${NAME:-iPhone} nicht erreichbar. Gleiches WLAN, entsperrt? Nächster Versuch in 1 h."
 
-{
-    echo "LAST_COMMIT=$HEAD_COMMIT"
-    echo "EXPIRES=$NEW_EXPIRES"
-} > "$STATE"
+LAST_COMMIT="$HEAD_COMMIT"
+EXPIRES="$NEW_EXPIRES"
+save_state
 
 MSG="Version $VERSION ($BUILD) installiert"
 [ "$NEW_EXPIRES" -gt 0 ] && MSG="$MSG, gültig bis $(when "$NEW_EXPIRES")"
 log "$MSG"
 notify "$MSG"
 
-# Neueste Fassung dieses Skripts für den nächsten Lauf übernehmen
+sync_data
+
+# Neueste Fassung der Skripte für den nächsten Lauf übernehmen
 cp "$REPO/Tools/auto-update.sh" "$BASE/auto-update.sh" 2>/dev/null || true
+cp "$REPO/Tools/sync-data.sh" "$BASE/sync-data.sh" 2>/dev/null || true
 exit 0

@@ -20,8 +20,8 @@ struct ComparePage: View {
     private var options: [Option] {
         var out: [Option] = []
         for e in lib.book.entries.sorted(by: { $0.date > $1.date }) {
-            out.append(Option(choice: .before(e.id), title: "Vor " + Fmt.day(e.date) + ": " + e.title))
-            out.append(Option(choice: .after(e.id), title: "Nach " + Fmt.day(e.date) + ": " + e.title))
+            out.append(Option(choice: .before(e.id), title: "Vor " + Fmt.day(e.date) + ": " + e.label))
+            out.append(Option(choice: .after(e.id), title: "Nach " + Fmt.day(e.date) + ": " + e.label))
         }
         for p in PeriodChoice.allCases {
             out.append(Option(choice: .period(p), title: p.title))
@@ -250,6 +250,7 @@ struct CompareCurves: View {
                                    range: [Color.red.opacity(0.55), Color.red, Color.green.opacity(0.55), Color.green])
         .chartYScale(domain: 0.8...1.15)
         .chartXScale(domain: 750.0...6250.0)
+        .rpmAxis()
         .chartLegend(position: .bottom)
     }
 }

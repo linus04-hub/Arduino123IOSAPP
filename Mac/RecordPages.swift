@@ -15,7 +15,7 @@ struct LogbookPage: View {
             List(entries, selection: $app.logID) { e in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(Fmt.date(e.date)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    Text(e.title).fontWeight(.semibold).lineLimit(2)
+                    Text(e.label).fontWeight(.semibold).lineLimit(2)
                     if !e.note.isEmpty { Text(e.note).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
                 }
                 .padding(.vertical, 2)
@@ -50,7 +50,7 @@ struct LogEntryDetail: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                PageHeader(title: entry.title, subtitle: Fmt.date(entry.date) + (entry.note.isEmpty ? "" : " · " + entry.note))
+                PageHeader(title: entry.label, subtitle: Fmt.date(entry.date) + (entry.note.isEmpty ? "" : " · " + entry.note))
                 HStack(alignment: .top, spacing: 14) {
                     Card(title: "Bedüsung", symbol: "wrench.and.screwdriver") {
                         Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 4) {
@@ -124,7 +124,7 @@ struct EffectCard: View {
                         let a = fx.lambda(r, after: true)
                         let t = targets.target(r)
                         GridRow {
-                            HStack(spacing: 6) { Circle().fill(r.tint).frame(width: 8, height: 8); Text(r.title) }
+                            HStack(spacing: 6) { Circle().fill(r.tint).frame(width: 8, height: 8); Text(r.title).lineLimit(1).fixedSize() }
                             Text(Fmt.num(b, 3))
                             Text(Fmt.num(a, 3)).fontWeight(.semibold)
                             Text(Fmt.signed(fx.delta(r), 3))

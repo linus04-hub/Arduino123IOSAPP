@@ -121,7 +121,7 @@ struct HeatmapView: View {
                 guard let v = values[r][c] else { continue }
                 let center = CGPoint(x: plot.minX + (CGFloat(c) + 0.5) * cw,
                                      y: plot.minY + (CGFloat(rows - 1 - r) + 0.5) * ch)
-                var s = signed ? String(format: "%+.\(digits)f", v) : String(format: "%.\(digits)f", v)
+                var s = signed ? SignedText.of(v, digits) : String(format: "%.\(digits)f", v)
                 if let l = labels {
                     guard let t = l[r][c] else { continue }
                     s = t

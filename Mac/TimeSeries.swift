@@ -12,9 +12,11 @@ final class TripCursor {
 }
 
 enum LaneGeo {
-    static let left: CGFloat = 76
+    static let left: CGFloat = 116
     static let right: CGFloat = 12
     static let laneHeight: CGFloat = 84
+    static func height(_ ch: Channel) -> CGFloat { ch == .lambda ? 128 : laneHeight }
+    static func total(_ lanes: [LaneData]) -> CGFloat { lanes.reduce(axis) { $0 + height($1.channel) } }
     static let axis: CGFloat = 22
 
     static func x(_ t: Double, _ domain: ClosedRange<Double>, width: CGFloat) -> CGFloat {
@@ -78,7 +80,7 @@ struct LanesView: View, Equatable {
         VStack(spacing: 0) {
             ForEach(lanes) { lane in
                 LaneCanvas(lane: lane, domain: domain)
-                    .frame(height: LaneGeo.laneHeight)
+                    .frame(height: LaneGeo.height(lane.channel))
             }
             TimeAxis(domain: domain, start: start)
                 .frame(height: LaneGeo.axis)

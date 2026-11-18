@@ -124,7 +124,7 @@ struct CheckCard: View {
     private func sub(_ f: Finding) -> String {
         var p: [String] = []
         if let t = f.target { p.append(String(format: "Ziel %.2f", t)) }
-        if f.seconds > 0 { p.append(TimeText.duration(f.seconds).replacingOccurrences(of: "0 min", with: "<1 min")) }
+        if f.seconds > 0 { p.append(f.seconds < 30 ? "<1 min" : TimeText.duration(f.seconds)) }
         if f.preliminary { p.append("vorläufig") }
         return p.isEmpty ? (f.area.regime?.area ?? "") : p.joined(separator: " · ")
     }
@@ -199,6 +199,7 @@ struct FindingDetailCard: View {
                         }
                         .chartYScale(domain: 0.75...1.25)
                         .chartXScale(domain: 750.0...6250.0)
+                        .rpmAxis()
                         .frame(height: 170)
                     }
                 }
@@ -226,17 +227,15 @@ struct KennfeldCard: View {
             ? counts.map { row in row.map { $0 > 0 ? "\($0)" : nil } }
             : nil
         Card(title: "Kennfeld", symbol: "square.grid.3x3.fill") {
-            HStack {
-                Picker("Ansicht", selection: $mode) {
-                    ForEach(MapMode.allCases) { m in Text(m.title).tag(m) }
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    modePicker
+                    Spacer(minLength: 12)
+                    steadyToggle
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 420)
-                Spacer()
-                if session.steadyCells != nil {
-                    Toggle("Nur ruhige Fahrt, Motor warm", isOn: $steadyOnly)
-                        .toggleStyle(.checkbox)
+                VStack(alignment: .leading, spacing: 8) {
+                    modePicker
+                    steadyToggle
                 }
             }
             HeatmapView(values: data.values, image: data.image, stops: mode.stops, digits: mode.digits,
@@ -247,6 +246,24 @@ struct KennfeldCard: View {
             Text("Waagrecht Drehzahl, senkrecht Saugrohrdruck in kPa (oben Vollgas). Gestrichelt: Grenzen der Betriebsbereiche. Kleine Zahl: Anzahl Messwerte.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var modePicker: some View {
+        Picker("Ansicht", selection: $mode) {
+            ForEach(MapMode.allCases) { m in Text(m.title).tag(m) }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+    }
+
+    @ViewBuilder private var steadyToggle: some View {
+        if session.steadyCells != nil {
+            Toggle("Nur ruhige Fahrt, Motor warm", isOn: $steadyOnly)
+                .toggleStyle(.checkbox)
+                .fixedSize()
+                .help("Nur Werte bei gleichmäßiger Fahrt und warmem Motor. Gasstöße, Schub und Kaltlauf fallen raus.")
         }
     }
 
@@ -353,6 +370,7 @@ struct ScatterChart: View {
             .chartForegroundStyleScale(domain: Self.loads, range: Self.loadColors)
             .chartYScale(domain: 0.7...1.3)
             .chartXScale(domain: 500.0...6000.0)
+            .rpmAxis()
         }
     }
 }

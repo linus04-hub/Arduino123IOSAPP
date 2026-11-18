@@ -86,6 +86,10 @@ echo "Gewählt: $NAME"
 # ── Hintergrund-Job ──
 cp "$REPO/Tools/auto-update.sh" "$BASE/auto-update.sh"
 chmod +x "$BASE/auto-update.sh"
+if [ -f "$REPO/Tools/sync-data.sh" ]; then
+    cp "$REPO/Tools/sync-data.sh" "$BASE/sync-data.sh"
+    chmod +x "$BASE/sync-data.sh"
+fi
 cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -115,11 +119,12 @@ launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null
 launchctl bootstrap "$DOMAIN" "$PLIST" || die "Hintergrund-Job ließ sich nicht starten."
 
 # ── Erster Lauf jetzt, damit Rückfragen hier im Terminal erscheinen ──
-say "Erster Durchlauf: bauen und aufs iPhone spielen (1 bis 5 Minuten) …"
+say "Erster Durchlauf: bauen, aufs iPhone spielen, Mac-App bauen, Daten holen (2 bis 8 Minuten) …"
 echo "Fragt der Mac nach dem Schlüsselbund-Passwort: dein Mac-Passwort eingeben und „Immer erlauben“."
 if FORCE=1 bash "$BASE/auto-update.sh"; then
-    say "Fertig. Der Mac prüft jetzt jede Stunde auf Updates und signiert rechtzeitig neu."
-    echo "Protokoll: ~/.citroen-auto/auto.log"
+    say "Fertig. Der Mac prüft jetzt jede Stunde auf Updates, signiert rechtzeitig neu und holt die Daten vom iPhone."
+    [ -d "$HOME/Applications/Citroën Analyse.app" ] && echo "Mac-App: ~/Applications/Citroën Analyse (auch im Launchpad)"
+    echo "Protokoll: ~/.citroen-auto/auto.log und sync.log"
 else
     say "Der erste Durchlauf hat nicht geklappt. Die letzten Zeilen aus dem Protokoll:"
     tail -n 25 "$BASE/auto.log"
