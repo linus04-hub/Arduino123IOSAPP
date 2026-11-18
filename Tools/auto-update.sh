@@ -1,10 +1,12 @@
 #!/bin/bash
 # Citroën-App automatisch aktualisieren und neu signieren.
 #
-# Läuft alle 3 Stunden im Hintergrund (eingerichtet von auto-setup.sh):
+# Läuft jede Stunde im Hintergrund (eingerichtet von auto-setup.sh):
 #   1. holt den neuesten Stand von GitHub (Zweig main)
 #   2. baut und installiert die App aufs iPhone, wenn es eine neue Version gibt
-#      oder die Signatur in weniger als 2,5 Tagen abläuft
+#      oder die Signatur abläuft. Ab 36 h vor Ablauf wird versucht, ob Apple
+#      schon eine neue Signatur ausstellt; installiert wird nur, wenn sie
+#      wirklich länger gilt. Spätestens nach dem Ablauf holt Xcode eine neue.
 #   3. meldet das Ergebnis als Mitteilung auf dem Mac
 # Sonst passiert nichts, die App auf dem iPhone wird nur bei Bedarf ersetzt.
 #
@@ -20,7 +22,7 @@ STATE="$BASE/state"
 CONF="$BASE/config"
 APP=CitroenAnzeige
 BUNDLE=de.linus.citroenanzeige
-RENEW_BEFORE=$((60 * 60 * 60))          # 60 h vor Ablauf neu signieren
+RENEW_BEFORE=$((36 * 60 * 60))          # ab 36 h vor Ablauf neu versuchen
 FORCE="${FORCE:-0}"
 
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
@@ -80,36 +82,22 @@ HEAD_COMMIT="$(git rev-parse HEAD)"
 # ── 2. Muss etwas passieren? ──
 NOW=$(date +%s)
 REASON=""
-RENEW=0
+EARLY=0
 if [ "$FORCE" = 1 ]; then
     REASON="von Hand gestartet"
-    RENEW=1
 elif [ "$HEAD_COMMIT" != "$LAST_COMMIT" ]; then
     REASON="neue Version"
+elif [ "$NOW" -ge "$EXPIRES" ]; then
+    REASON="Signatur abgelaufen"
 elif [ $((EXPIRES - NOW)) -lt $RENEW_BEFORE ]; then
-    REASON="Signatur läuft ab"
-    RENEW=1
+    REASON="Signatur läuft bald ab"
+    EARLY=1
 fi
 if [ -z "$REASON" ]; then
     log "Nichts zu tun, gültig bis $(when "$EXPIRES")"
     exit 0
 fi
 log "Starte: $REASON"
-
-# Beim Erneuern die zwischengespeicherten Profile der App löschen, damit Xcode
-# ein neues bei Apple holt statt das alte (mit altem Ablaufdatum) weiterzuverwenden
-if [ "$RENEW" = 1 ]; then
-    for dir in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" \
-               "$HOME/Library/MobileDevice/Provisioning Profiles"; do
-        [ -d "$dir" ] || continue
-        for f in "$dir"/*.mobileprovision "$dir"/*.provisionprofile; do
-            [ -f "$f" ] || continue
-            if security cms -D -i "$f" 2>/dev/null | grep -q "$BUNDLE"; then
-                rm -f "$f"
-            fi
-        done
-    done
-fi
 
 # ── 3. Bauen ──
 log "Baue …"
@@ -140,10 +128,17 @@ fi
 VERSION=$(plutil -extract CFBundleShortVersionString raw -o - "$APP_PATH/Info.plist" 2>/dev/null || echo "?")
 BUILD=$(plutil -extract CFBundleVersion raw -o - "$APP_PATH/Info.plist" 2>/dev/null || echo "?")
 
+# Vor Ablauf nur installieren, wenn die neue Signatur wirklich länger gilt.
+# Sonst würde die App ohne Nutzen neu gestartet.
+if [ "$EARLY" = 1 ] && [ "$NEW_EXPIRES" -le $((EXPIRES + 3600)) ]; then
+    log "Noch keine neue Signatur von Apple (gilt bis $(when "$EXPIRES")), nächster Versuch in 1 h"
+    exit 0
+fi
+
 # ── 4. Aufs iPhone ──
 log "Installiere auf ${NAME:-iPhone} …"
 xcrun devicectl device install app --device "$UDID" "$APP_PATH" >> "$LOG" 2>&1 \
-    || fail "${NAME:-iPhone} nicht erreichbar. Gleiches WLAN, entsperrt? Nächster Versuch in 3 h."
+    || fail "${NAME:-iPhone} nicht erreichbar. Gleiches WLAN, entsperrt? Nächster Versuch in 1 h."
 
 {
     echo "LAST_COMMIT=$HEAD_COMMIT"

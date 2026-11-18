@@ -99,7 +99,7 @@ cat > "$PLIST" <<EOF
         <string>$BASE/auto-update.sh</string>
     </array>
     <key>StartInterval</key>
-    <integer>10800</integer>
+    <integer>3600</integer>
     <key>RunAtLoad</key>
     <false/>
     <key>StandardOutPath</key>
@@ -118,11 +118,11 @@ launchctl bootstrap "$DOMAIN" "$PLIST" || die "Hintergrund-Job ließ sich nicht 
 say "Erster Durchlauf: bauen und aufs iPhone spielen (1 bis 5 Minuten) …"
 echo "Fragt der Mac nach dem Schlüsselbund-Passwort: dein Mac-Passwort eingeben und „Immer erlauben“."
 if FORCE=1 bash "$BASE/auto-update.sh"; then
-    say "Fertig. Der Mac prüft jetzt alle 3 Stunden auf Updates und signiert rechtzeitig neu."
+    say "Fertig. Der Mac prüft jetzt jede Stunde auf Updates und signiert rechtzeitig neu."
     echo "Protokoll: ~/.citroen-auto/auto.log"
 else
     say "Der erste Durchlauf hat nicht geklappt. Die letzten Zeilen aus dem Protokoll:"
     tail -n 25 "$BASE/auto.log"
     echo
-    echo "Die Automatik ist trotzdem eingerichtet und versucht es in 3 Stunden wieder."
+    echo "Die Automatik ist trotzdem eingerichtet und versucht es in einer Stunde wieder."
 fi
