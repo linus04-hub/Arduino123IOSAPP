@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		00E8B7D1B18F93037564DC6C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1931497910322D1FC40E5746 /* Assets.xcassets */; };
 		043F2B154F2611668E214931 /* CitroenActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21ADF45C4EE0FC1E1FC93665 /* CitroenActivity.swift */; };
+		0B31CB79755D5886C02CE417 /* Mixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F82587C5D9EE0492E65E2E6 /* Mixture.swift */; };
 		0CFF65E0BEB9B4AE24DFA1C6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7E5643A0BFA59B62DBE60CD /* SettingsView.swift */; };
 		0E04E136B9A3356737A0B518 /* TuningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 522D7B9BC5E2ECD901F94680 /* TuningView.swift */; };
 		1134A644311416ED1D3773DD /* Mixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F82587C5D9EE0492E65E2E6 /* Mixture.swift */; };
@@ -17,12 +18,20 @@
 		177D0AF9C7F11715E60510A1 /* CitroenAnzeigeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 572CD03821DD1E80FFBBC694 /* CitroenAnzeigeApp.swift */; };
 		1D5A65905519D4D95B3118DC /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C607C028195188C22AC99DC1 /* AppModel.swift */; };
 		1DCDE64734717AC0CBB0FCF1 /* SmoothMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = C86524CA8DA5F9960776CD48 /* SmoothMap.swift */; };
+		211B3A12065629499F00A8ED /* DemoData.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBD8F1E722D015C1EE353920 /* DemoData.swift */; };
 		21569E99C1B6E7CDB1E3E322 /* Samples.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC0651F8FE6CB2FD7792E692 /* Samples.swift */; };
+		27B9DCDFB0354FF4445506B6 /* TimeSeries.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9129C30E2EAE36F826EDD991 /* TimeSeries.swift */; };
+		290E24C2B1F2A12057490F39 /* TuningSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6869369D497E46A44AC0AB6D /* TuningSession.swift */; };
+		2E00FD0292031DD5E1A4D9B0 /* TripModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC79B7A778429E892B1A5ED1 /* TripModel.swift */; };
+		2E1DBF8BA87142CFF1F2DC46 /* TipInDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BA3C747588AF1596A815D9 /* TipInDetector.swift */; };
+		3179531D402D7F203F8F8E8F /* SessionAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D7B9637541CDEE8FEC88478 /* SessionAnalysis.swift */; };
+		3266DFE57A827A827E82F8BC /* OverviewPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F5BBCFC48FCBCC113C17278 /* OverviewPages.swift */; };
 		332ACE6EB659B85CFD701D26 /* CitroenWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 92D29DFDE8D4EB453EA94097 /* CitroenWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		34ED85FBEF1513F111DC93EE /* LiveSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02B61E42265F8022F1E95C70 /* LiveSupport.swift */; };
 		3D92D65A3C23D8DFB1AB1AB4 /* Stores.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B1FA815158587D7C2F77107 /* Stores.swift */; };
 		404A2C918050D5E2C26C6406 /* ScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C75EDA5868D45CA6821EA9C /* ScreenshotTests.swift */; };
 		43421579DC71C08FEF67DCAC /* Tune123ProgramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D94B99D5F5666EBACA2F5120 /* Tune123ProgramView.swift */; };
+		49BAC33F83087D697B9C76FD /* TripsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FCE7F5770E0A78B760B5CBC /* TripsPage.swift */; };
 		4BD382C09527AF8D73739D64 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9E539E477297BEE4FA2098 /* ContentView.swift */; };
 		4CC4A7C3A58730E4E3B729FF /* JetCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E3C54ADF6593D1168550FB8 /* JetCalculator.swift */; };
 		54D3C5EAB8D467E6BDE8E16A /* CitroenActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21ADF45C4EE0FC1E1FC93665 /* CitroenActivity.swift */; };
@@ -30,25 +39,44 @@
 		5AC52677958369686E56BCB4 /* LiveActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DCE86C6C0C5684FF14E8DF /* LiveActivityController.swift */; };
 		5F610C3570AB4FAE7A2FE98C /* Gauges.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94DD881198B1CB9213DD5398 /* Gauges.swift */; };
 		67D3C451DDCE15287A39B3F6 /* TripsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126DCB0EE2475B22EAE91934 /* TripsView.swift */; };
+		6DD19FA51B7F8FE06E756C57 /* EventPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C8262FF5C93B1FA064FE3C9 /* EventPages.swift */; };
+		6EB1FFD12178DF789F9BF93C /* ComparePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 354D10BEED04BEAF7DEDB8D5 /* ComparePage.swift */; };
 		6EE151126E85986965CB3EA4 /* TipInDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BA3C747588AF1596A815D9 /* TipInDetector.swift */; };
 		741C1BC8BE06A7EC516B4008 /* BLEManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6F7EFE4479D67A32C5D6B /* BLEManager.swift */; };
 		74B6B646E4AB8A380B6534A7 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3A9C6E03E6E07A15E94865A /* LocationManager.swift */; };
+		758CE5CF540C1289531256C5 /* MacComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C7F1C38EF2E30450BED190B /* MacComponents.swift */; };
+		75B43DB8604FC3BFABBBAC0C /* AlertMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1835242FAEA1742B71428A5 /* AlertMonitor.swift */; };
+		76F84DC208A24BDB290E2A16 /* MapData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D8C286500D9A1BACEEACE47 /* MapData.swift */; };
 		77A8747B08B810DFA0FF5017 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5212D469CF8C1843726EA05 /* Theme.swift */; };
 		7B92216969CD5E6935C8DDF6 /* TuningStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF96243066959E21AC282FA /* TuningStore.swift */; };
+		7E9A60E1DAA49F1952911D1C /* Samples.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC0651F8FE6CB2FD7792E692 /* Samples.swift */; };
 		8A7AB5DFA02B68A932C8B2D5 /* TuningSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6869369D497E46A44AC0AB6D /* TuningSession.swift */; };
 		8BE0527E88C0D2D7A93A0715 /* CitroenWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD6A4F910CDD1F3D9A7FC768 /* CitroenWidgets.swift */; };
+		8D0179023E173B58D194CFA4 /* TripModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC79B7A778429E892B1A5ED1 /* TripModel.swift */; };
 		931FB7917351D856E231FA14 /* PullDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E8195B67C30E72FDE3B181D /* PullDetector.swift */; };
 		9B6278762236AC6879DA3E95 /* TipInAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 237EEEE7CD61EE1FA326E11F /* TipInAnalyzer.swift */; };
+		A1C5198192BFBB34E40279CA /* PullDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E8195B67C30E72FDE3B181D /* PullDetector.swift */; };
+		A1D770E3FD3A9A0C976E9B79 /* HeatmapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85319E0F4DD3ED888D75F718 /* HeatmapView.swift */; };
 		AA274365671C7F3C4F81BC4C /* IdleAssistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA33F2935F477E62AE0006E3 /* IdleAssistant.swift */; };
 		B5F7F062600DA5CD03657A21 /* CarbLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1F89259F346188B850EBFF7 /* CarbLogView.swift */; };
+		B6C0040858EB8A61FAB6794E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 32AB5C815A9B0985831B9EDF /* Assets.xcassets */; };
+		BC720F4CF6C81C9978B28A76 /* Library.swift in Sources */ = {isa = PBXBuildFile; fileRef = C174D15A3B8948A1446612A8 /* Library.swift */; };
+		BD643FA586F860D6D5B3E668 /* CarbSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75CB53F2F5468C43508498D2 /* CarbSetup.swift */; };
+		BEF79C0920247D0A4301CE9E /* RecordPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95B519E37F33DDA16275C272 /* RecordPages.swift */; };
+		C2A04D7A10D898A91DB5D1F6 /* MixtureDiagnosis.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0BAD0825A6017F5342A2C94 /* MixtureDiagnosis.swift */; };
 		C455DB9216D4A05EFF43ECAC /* LinkDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DEC1623523E3EA5DCADB5DE /* LinkDiagnostics.swift */; };
+		C457A8610E33C911CED75EB3 /* RouteMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 672C30FEAD2E7159C5BDE3A9 /* RouteMap.swift */; };
 		C461A93CE4622A70DAFF94F8 /* Layouts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAB7BED691521205774CB66 /* Layouts.swift */; };
 		C52E4386B553CC5E5DF1295C /* AlertMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1835242FAEA1742B71428A5 /* AlertMonitor.swift */; };
+		C602B3720BB6B63BB0A5A692 /* MacCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEB4EA0257BF258211C69CF1 /* MacCore.swift */; };
 		C71BC46FF95EDA8F1FC14AFB /* Metrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94900D4CA50B13C0FFF418CA /* Metrics.swift */; };
+		C831B158977A0C2BE9B11378 /* MacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CD605C34B553DACB7DBDAB /* MacApp.swift */; };
 		CBB7408FA6041C97A012D2F2 /* CarbSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75CB53F2F5468C43508498D2 /* CarbSetup.swift */; };
 		E2568EAF5769147746335CBF /* CheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A4A250195867CF6226FEC0 /* CheckView.swift */; };
 		E5DDA28312DFF31976FF02AD /* Tune123.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD61C43148C737E4D8D6F4E9 /* Tune123.swift */; };
+		E724058820605BFA28E747E6 /* MapData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D8C286500D9A1BACEEACE47 /* MapData.swift */; };
 		E828D27647CF200720041945 /* MixtureDiagnosis.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0BAD0825A6017F5342A2C94 /* MixtureDiagnosis.swift */; };
+		F8D0B5C10E79E8B34F343CCD /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C1619AE16E23F31106D0636 /* Support.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -87,6 +115,7 @@
 		02B61E42265F8022F1E95C70 /* LiveSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSupport.swift; sourceTree = "<group>"; };
 		02DCE86C6C0C5684FF14E8DF /* LiveActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityController.swift; sourceTree = "<group>"; };
 		04B6F7EFE4479D67A32C5D6B /* BLEManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEManager.swift; sourceTree = "<group>"; };
+		0D7B9637541CDEE8FEC88478 /* SessionAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAnalysis.swift; sourceTree = "<group>"; };
 		0DEC1623523E3EA5DCADB5DE /* LinkDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkDiagnostics.swift; sourceTree = "<group>"; };
 		11D77976B1CAE8278C55CFB8 /* PullsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullsView.swift; sourceTree = "<group>"; };
 		126DCB0EE2475B22EAE91934 /* TripsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripsView.swift; sourceTree = "<group>"; };
@@ -95,24 +124,39 @@
 		1E8195B67C30E72FDE3B181D /* PullDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullDetector.swift; sourceTree = "<group>"; };
 		21ADF45C4EE0FC1E1FC93665 /* CitroenActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitroenActivity.swift; sourceTree = "<group>"; };
 		237EEEE7CD61EE1FA326E11F /* TipInAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipInAnalyzer.swift; sourceTree = "<group>"; };
+		2D8C286500D9A1BACEEACE47 /* MapData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapData.swift; sourceTree = "<group>"; };
+		32AB5C815A9B0985831B9EDF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		354D10BEED04BEAF7DEDB8D5 /* ComparePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComparePage.swift; sourceTree = "<group>"; };
 		3A9E539E477297BEE4FA2098 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		4C1619AE16E23F31106D0636 /* Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Support.swift; sourceTree = "<group>"; };
 		51A4A250195867CF6226FEC0 /* CheckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckView.swift; sourceTree = "<group>"; };
 		522D7B9BC5E2ECD901F94680 /* TuningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuningView.swift; sourceTree = "<group>"; };
 		572CD03821DD1E80FFBBC694 /* CitroenAnzeigeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitroenAnzeigeApp.swift; sourceTree = "<group>"; };
 		57BA3C747588AF1596A815D9 /* TipInDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipInDetector.swift; sourceTree = "<group>"; };
+		5F5BBCFC48FCBCC113C17278 /* OverviewPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPages.swift; sourceTree = "<group>"; };
+		672C30FEAD2E7159C5BDE3A9 /* RouteMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteMap.swift; sourceTree = "<group>"; };
 		6869369D497E46A44AC0AB6D /* TuningSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuningSession.swift; sourceTree = "<group>"; };
+		68EB42EB3C466A6DC9BA3CCF /* CitroenMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CitroenMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6C7F1C38EF2E30450BED190B /* MacComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacComponents.swift; sourceTree = "<group>"; };
+		6C8262FF5C93B1FA064FE3C9 /* EventPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventPages.swift; sourceTree = "<group>"; };
 		75CB53F2F5468C43508498D2 /* CarbSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarbSetup.swift; sourceTree = "<group>"; };
+		85319E0F4DD3ED888D75F718 /* HeatmapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatmapView.swift; sourceTree = "<group>"; };
 		8AF96243066959E21AC282FA /* TuningStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuningStore.swift; sourceTree = "<group>"; };
 		8B1FA815158587D7C2F77107 /* Stores.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stores.swift; sourceTree = "<group>"; };
 		8E3C54ADF6593D1168550FB8 /* JetCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JetCalculator.swift; sourceTree = "<group>"; };
 		8F82587C5D9EE0492E65E2E6 /* Mixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mixture.swift; sourceTree = "<group>"; };
+		9129C30E2EAE36F826EDD991 /* TimeSeries.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeSeries.swift; sourceTree = "<group>"; };
 		92D29DFDE8D4EB453EA94097 /* CitroenWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = CitroenWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		94900D4CA50B13C0FFF418CA /* Metrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Metrics.swift; sourceTree = "<group>"; };
 		94DD881198B1CB9213DD5398 /* Gauges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gauges.swift; sourceTree = "<group>"; };
+		95B519E37F33DDA16275C272 /* RecordPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordPages.swift; sourceTree = "<group>"; };
 		9C75EDA5868D45CA6821EA9C /* ScreenshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotTests.swift; sourceTree = "<group>"; };
+		9FCE7F5770E0A78B760B5CBC /* TripsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripsPage.swift; sourceTree = "<group>"; };
 		B3A9C6E03E6E07A15E94865A /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		BCB4C11D9A68DE3CC76067E9 /* CitroenAnzeigeUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CitroenAnzeigeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BD6A4F910CDD1F3D9A7FC768 /* CitroenWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitroenWidgets.swift; sourceTree = "<group>"; };
+		BEB4EA0257BF258211C69CF1 /* MacCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacCore.swift; sourceTree = "<group>"; };
+		C174D15A3B8948A1446612A8 /* Library.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Library.swift; sourceTree = "<group>"; };
 		C5212D469CF8C1843726EA05 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		C607C028195188C22AC99DC1 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		C86524CA8DA5F9960776CD48 /* SmoothMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmoothMap.swift; sourceTree = "<group>"; };
@@ -121,10 +165,13 @@
 		D6932A515C67E1ED5F8C9037 /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
 		D94B99D5F5666EBACA2F5120 /* Tune123ProgramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tune123ProgramView.swift; sourceTree = "<group>"; };
 		DC0651F8FE6CB2FD7792E692 /* Samples.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Samples.swift; sourceTree = "<group>"; };
+		DC79B7A778429E892B1A5ED1 /* TripModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripModel.swift; sourceTree = "<group>"; };
 		E7E5643A0BFA59B62DBE60CD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		E8CD605C34B553DACB7DBDAB /* MacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacApp.swift; sourceTree = "<group>"; };
 		F0BAD0825A6017F5342A2C94 /* MixtureDiagnosis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MixtureDiagnosis.swift; sourceTree = "<group>"; };
 		F9C172BC4815E4D2ACDE2ABA /* TripRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripRecorder.swift; sourceTree = "<group>"; };
 		FA33F2935F477E62AE0006E3 /* IdleAssistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdleAssistant.swift; sourceTree = "<group>"; };
+		FBD8F1E722D015C1EE353920 /* DemoData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoData.swift; sourceTree = "<group>"; };
 		FD61C43148C737E4D8D6F4E9 /* Tune123.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tune123.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -135,6 +182,28 @@
 				21ADF45C4EE0FC1E1FC93665 /* CitroenActivity.swift */,
 			);
 			path = Shared;
+			sourceTree = "<group>";
+		};
+		1770788D7F85FCD434FB0DAB /* Mac */ = {
+			isa = PBXGroup;
+			children = (
+				354D10BEED04BEAF7DEDB8D5 /* ComparePage.swift */,
+				FBD8F1E722D015C1EE353920 /* DemoData.swift */,
+				6C8262FF5C93B1FA064FE3C9 /* EventPages.swift */,
+				85319E0F4DD3ED888D75F718 /* HeatmapView.swift */,
+				C174D15A3B8948A1446612A8 /* Library.swift */,
+				E8CD605C34B553DACB7DBDAB /* MacApp.swift */,
+				6C7F1C38EF2E30450BED190B /* MacComponents.swift */,
+				BEB4EA0257BF258211C69CF1 /* MacCore.swift */,
+				5F5BBCFC48FCBCC113C17278 /* OverviewPages.swift */,
+				95B519E37F33DDA16275C272 /* RecordPages.swift */,
+				672C30FEAD2E7159C5BDE3A9 /* RouteMap.swift */,
+				0D7B9637541CDEE8FEC88478 /* SessionAnalysis.swift */,
+				4C1619AE16E23F31106D0636 /* Support.swift */,
+				9129C30E2EAE36F826EDD991 /* TimeSeries.swift */,
+				9FCE7F5770E0A78B760B5CBC /* TripsPage.swift */,
+			);
+			path = Mac;
 			sourceTree = "<group>";
 		};
 		1B2042EC49C898DEAFF7AEFE /* UITests */ = {
@@ -165,6 +234,7 @@
 				02DCE86C6C0C5684FF14E8DF /* LiveActivityController.swift */,
 				02B61E42265F8022F1E95C70 /* LiveSupport.swift */,
 				B3A9C6E03E6E07A15E94865A /* LocationManager.swift */,
+				2D8C286500D9A1BACEEACE47 /* MapData.swift */,
 				94900D4CA50B13C0FFF418CA /* Metrics.swift */,
 				8F82587C5D9EE0492E65E2E6 /* Mixture.swift */,
 				F0BAD0825A6017F5342A2C94 /* MixtureDiagnosis.swift */,
@@ -177,6 +247,7 @@
 				C5212D469CF8C1843726EA05 /* Theme.swift */,
 				237EEEE7CD61EE1FA326E11F /* TipInAnalyzer.swift */,
 				57BA3C747588AF1596A815D9 /* TipInDetector.swift */,
+				DC79B7A778429E892B1A5ED1 /* TripModel.swift */,
 				F9C172BC4815E4D2ACDE2ABA /* TripRecorder.swift */,
 				126DCB0EE2475B22EAE91934 /* TripsView.swift */,
 				FD61C43148C737E4D8D6F4E9 /* Tune123.swift */,
@@ -201,6 +272,7 @@
 			children = (
 				00E50A59BCF6E1FD3764FB6F /* CitroenAnzeige.app */,
 				BCB4C11D9A68DE3CC76067E9 /* CitroenAnzeigeUITests.xctest */,
+				68EB42EB3C466A6DC9BA3CCF /* CitroenMac.app */,
 				92D29DFDE8D4EB453EA94097 /* CitroenWidgets.appex */,
 			);
 			name = Products;
@@ -217,6 +289,8 @@
 		AF4769D4943D325A3279E53C = {
 			isa = PBXGroup;
 			children = (
+				1770788D7F85FCD434FB0DAB /* Mac */,
+				B1A28E5C6ED256500EBA4D25 /* MacResources */,
 				AA2B7DD3D85D4D8A7774BF41 /* Resources */,
 				00E5926E331750454CE735AF /* Shared */,
 				751EFF3EE8853EDCD9A808A6 /* Sources */,
@@ -224,6 +298,14 @@
 				757BC8F4A5C86323336E936D /* Widgets */,
 				91DEA3909E49A4CAB31771ED /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		B1A28E5C6ED256500EBA4D25 /* MacResources */ = {
+			isa = PBXGroup;
+			children = (
+				32AB5C815A9B0985831B9EDF /* Assets.xcassets */,
+			);
+			path = MacResources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -246,6 +328,24 @@
 			productName = CitroenAnzeigeUITests;
 			productReference = BCB4C11D9A68DE3CC76067E9 /* CitroenAnzeigeUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		91F0D152DE464537BCFF93D1 /* CitroenMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7AFF19476B779FC86DBBCB73 /* Build configuration list for PBXNativeTarget "CitroenMac" */;
+			buildPhases = (
+				9258B268B56E2AB1E7CDF01E /* Sources */,
+				476206637EB6D42805F13D89 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CitroenMac;
+			packageProductDependencies = (
+			);
+			productName = CitroenMac;
+			productReference = 68EB42EB3C466A6DC9BA3CCF /* CitroenMac.app */;
+			productType = "com.apple.product-type.application";
 		};
 		D3F145822A42AF96A30F4C3E /* CitroenWidgets */ = {
 			isa = PBXNativeTarget;
@@ -298,6 +398,10 @@
 						ProvisioningStyle = Automatic;
 						TestTargetID = E58AD993729B06C66BADAB46;
 					};
+					91F0D152DE464537BCFF93D1 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
+					};
 					D3F145822A42AF96A30F4C3E = {
 						DevelopmentTeam = 34KNQH7F76;
 						ProvisioningStyle = Automatic;
@@ -325,11 +429,20 @@
 				E58AD993729B06C66BADAB46 /* CitroenAnzeige */,
 				D3F145822A42AF96A30F4C3E /* CitroenWidgets */,
 				76D4A824785E7A57E4F5F88E /* CitroenAnzeigeUITests */,
+				91F0D152DE464537BCFF93D1 /* CitroenMac */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		476206637EB6D42805F13D89 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B6C0040858EB8A61FAB6794E /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		EE00016C8890007D050BECB3 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -363,6 +476,7 @@
 				5AC52677958369686E56BCB4 /* LiveActivityController.swift in Sources */,
 				34ED85FBEF1513F111DC93EE /* LiveSupport.swift in Sources */,
 				74B6B646E4AB8A380B6534A7 /* LocationManager.swift in Sources */,
+				E724058820605BFA28E747E6 /* MapData.swift in Sources */,
 				C71BC46FF95EDA8F1FC14AFB /* Metrics.swift in Sources */,
 				1134A644311416ED1D3773DD /* Mixture.swift in Sources */,
 				E828D27647CF200720041945 /* MixtureDiagnosis.swift in Sources */,
@@ -375,6 +489,7 @@
 				77A8747B08B810DFA0FF5017 /* Theme.swift in Sources */,
 				9B6278762236AC6879DA3E95 /* TipInAnalyzer.swift in Sources */,
 				6EE151126E85986965CB3EA4 /* TipInDetector.swift in Sources */,
+				2E00FD0292031DD5E1A4D9B0 /* TripModel.swift in Sources */,
 				16851B2D142380B059AE2E06 /* TripRecorder.swift in Sources */,
 				67D3C451DDCE15287A39B3F6 /* TripsView.swift in Sources */,
 				E5DDA28312DFF31976FF02AD /* Tune123.swift in Sources */,
@@ -382,6 +497,38 @@
 				8A7AB5DFA02B68A932C8B2D5 /* TuningSession.swift in Sources */,
 				7B92216969CD5E6935C8DDF6 /* TuningStore.swift in Sources */,
 				0E04E136B9A3356737A0B518 /* TuningView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9258B268B56E2AB1E7CDF01E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				75B43DB8604FC3BFABBBAC0C /* AlertMonitor.swift in Sources */,
+				BD643FA586F860D6D5B3E668 /* CarbSetup.swift in Sources */,
+				6EB1FFD12178DF789F9BF93C /* ComparePage.swift in Sources */,
+				211B3A12065629499F00A8ED /* DemoData.swift in Sources */,
+				6DD19FA51B7F8FE06E756C57 /* EventPages.swift in Sources */,
+				A1D770E3FD3A9A0C976E9B79 /* HeatmapView.swift in Sources */,
+				BC720F4CF6C81C9978B28A76 /* Library.swift in Sources */,
+				C831B158977A0C2BE9B11378 /* MacApp.swift in Sources */,
+				758CE5CF540C1289531256C5 /* MacComponents.swift in Sources */,
+				C602B3720BB6B63BB0A5A692 /* MacCore.swift in Sources */,
+				76F84DC208A24BDB290E2A16 /* MapData.swift in Sources */,
+				0B31CB79755D5886C02CE417 /* Mixture.swift in Sources */,
+				C2A04D7A10D898A91DB5D1F6 /* MixtureDiagnosis.swift in Sources */,
+				3266DFE57A827A827E82F8BC /* OverviewPages.swift in Sources */,
+				A1C5198192BFBB34E40279CA /* PullDetector.swift in Sources */,
+				BEF79C0920247D0A4301CE9E /* RecordPages.swift in Sources */,
+				C457A8610E33C911CED75EB3 /* RouteMap.swift in Sources */,
+				7E9A60E1DAA49F1952911D1C /* Samples.swift in Sources */,
+				3179531D402D7F203F8F8E8F /* SessionAnalysis.swift in Sources */,
+				F8D0B5C10E79E8B34F343CCD /* Support.swift in Sources */,
+				27B9DCDFB0354FF4445506B6 /* TimeSeries.swift in Sources */,
+				2E1DBF8BA87142CFF1F2DC46 /* TipInDetector.swift in Sources */,
+				8D0179023E173B58D194CFA4 /* TripModel.swift in Sources */,
+				49BAC33F83087D697B9C76FD /* TripsPage.swift in Sources */,
+				290E24C2B1F2A12057490F39 /* TuningSession.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -436,6 +583,27 @@
 			};
 			name = Release;
 		};
+		45408A9802EC109C09FE0AC0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				INFOPLIST_FILE = "CitroenMac-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.linus.citroenanzeige.mac;
+				PRODUCT_NAME = CitroenAnalyse;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
 		609AD599DE08378D47967D9A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -452,6 +620,27 @@
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
 				TEST_TARGET_NAME = CitroenAnzeige;
+			};
+			name = Debug;
+		};
+		67680CC23AA2411E547312F6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				INFOPLIST_FILE = "CitroenMac-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.linus.citroenanzeige.mac;
+				PRODUCT_NAME = CitroenAnalyse;
+				SDKROOT = macosx;
 			};
 			name = Debug;
 		};
@@ -581,12 +770,12 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 2.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -640,11 +829,11 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 2.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
@@ -677,6 +866,15 @@
 			buildConfigurations = (
 				6CB8AD91F543A5E1391CD873 /* Debug */,
 				0C2408117A8D76E794FA53C4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7AFF19476B779FC86DBBCB73 /* Build configuration list for PBXNativeTarget "CitroenMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				67680CC23AA2411E547312F6 /* Debug */,
+				45408A9802EC109C09FE0AC0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
